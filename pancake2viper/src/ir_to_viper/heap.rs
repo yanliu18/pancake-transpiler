@@ -142,7 +142,7 @@ impl<'a> TryToViper<'a> for ir::StoreBits {
 
         let byte_address = self.address.to_viper(ctx)?;
         let word_offset = ast.module(byte_address, bytes_in_word);
-        let word_address = ast.sub(byte_address, word_offset);
+        let word_index = ast.div(byte_address, ast.int_lit(8));
         let bit_mask = ast.backend_bv64_lit(2_u64.pow(self.size.bits()) - 1);
         let shift_amount = ast.int_to_backend_bv(BV64, ast.mul(bytes_in_word, word_offset));
         let mask = ast.bv_binop(BinOpBv::BvShl, BV64, bit_mask, shift_amount);
@@ -155,7 +155,7 @@ impl<'a> TryToViper<'a> for ir::StoreBits {
         );
         let value = ast.bv_binop(BinOpBv::BvShl, BV64, value, shift_amount);
         let heap_var = ctx.utils.heap_var().1;
-        let old = ast.int_to_backend_bv(BV64, heap.access(heap_var, word_address, MemType::Local));
+        let old = ast.int_to_backend_bv(BV64, heap.access(heap_var, word_index, MemType::Local));
         let new = ast.bv_binop(
             BinOpBv::BitOr,
             BV64,
@@ -163,7 +163,7 @@ impl<'a> TryToViper<'a> for ir::StoreBits {
             ast.bv_binop(BinOpBv::BitAnd, BV64, value, mask),
         );
         let new = ast.backend_bv_to_int(BV64, new);
-        let field_ass = ast.field_assign(heap.access(heap_var, word_address, MemType::Local), new);
+        let field_ass = ast.field_assign(heap.access(heap_var, word_index, MemType::Local), new);
         Ok(ast.seqn(&[assertion, field_ass], &[]))
     }
 }

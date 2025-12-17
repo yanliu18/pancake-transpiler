@@ -1,7 +1,11 @@
 fun main() {
-    /@ requires acc(heap[0]) @/
-    st @base, 255 + 256;
-    st8 @base + 1, 42;
-    /@ assert heap[0] == 256 * 42 + 255 @/
+    /@ requires acc(heap[1]) @/
+    st @base + 8, 255 + 256;
+    st8 @base + 9, 42;
+    /@ assert heap[1] == 256 * 42 + 255 @/
+
+    var v = ld8 @base + 9;
+    /@ assert v == 42 @/
+
     return 0;
 }
