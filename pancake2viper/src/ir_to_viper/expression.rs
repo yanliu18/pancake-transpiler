@@ -308,12 +308,17 @@ impl<'a> TryToViper<'a> for ir::MethodCall {
         );
         ctx.consume_stack = false;
 
+        let mut fname = self.fname;
+        if ctx.pnk_methods.contains(&fname) {
+            fname = fname.to_owned() + "___abstract";
+        }
+
         // Transpiled arguments
         let args = self.args.to_viper(ctx)?;
         let mut base_args = ctx.get_default_args().1;
         base_args.extend(args);
 
-        let call = ast.method_call(&self.fname, &base_args, &[ret.1]);
+        let call = ast.method_call(&fname, &base_args, &[ret.1]);
         ctx.declarations.push(ret.0);
         ctx.stack.push(call);
         ctx.consume_stack = true;

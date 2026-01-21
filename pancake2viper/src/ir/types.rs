@@ -211,7 +211,8 @@ impl TypeResolution for ir::FnDec {
         let ret_type = ctx.get_type_no_mangle(&self.retvar);
         match ret_type {
             Ok(typ) => {
-                ctx.set_type(self.fname.clone(), typ);
+                ctx.set_type(self.fname.clone(), typ.clone());
+                ctx.set_type(self.fname.clone() + "___abstract", typ.clone());
                 Ok(())
             }
             Err(TranslationError::UnknownShape(_)) => {

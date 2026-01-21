@@ -21,7 +21,7 @@ impl<'a> ToViper<'a> for Arg {
 }
 
 impl<'a> TryToViper<'a> for FnDec {
-    type Output = viper::Method<'a>;
+    type Output = (viper::Method<'a>, viper::Method<'a>);
     fn to_viper(self, ctx: &mut ViperEncodeCtx<'a>) -> Result<Self::Output, ToViperError> {
         let ast = ctx.ast;
 
@@ -76,14 +76,26 @@ impl<'a> TryToViper<'a> for FnDec {
         let mut base_args_local_decls = ctx.get_default_args().0;
         base_args_local_decls.extend(args_local_decls);
 
-        Ok(ast.method(
+        let method = ast.method(
             &self.fname,
             &base_args_local_decls,
             &[ast.local_var_decl(&self.retvar, ctx.get_type(&self.retvar)?.to_viper_type(ctx))],
             &pres,
             &posts,
             if self.trusted { None } else { Some(body) },
-        ))
+        );
+
+        let abstract_name = self.fname.to_owned() + "___abstract";
+        let abstract_method = ast.method(
+            &abstract_name,
+            &base_args_local_decls,
+            &[ast.local_var_decl(&self.retvar, ctx.get_type(&self.retvar)?.to_viper_type(ctx))],
+            &pres,
+            &posts,
+            None,
+        );
+
+        Ok((method, abstract_method))
     }
 }
 
@@ -199,6 +211,12 @@ impl<'a> ProgramToViper<'a> for Program {
             .map(|p| p.name.to_owned())
             .collect::<HashSet<_>>();
 
+        let pnk_methods = self
+            .functions
+            .iter()
+            .map(|e| e.fname.to_owned())
+            .collect::<HashSet<_>>();
+
         let mut ctx = ViperEncodeCtx::new(
             types.clone(),
             predicate_names.clone(),
@@ -207,6 +225,7 @@ impl<'a> ProgramToViper<'a> for Program {
             shared.clone(),
             method_ctx.clone(),
             model.clone(),
+            pnk_methods.clone(),
             extern_methods.clone(),
             extern_consts.clone(),
         );
@@ -224,6 +243,7 @@ impl<'a> ProgramToViper<'a> for Program {
                     shared.clone(),
                     method_ctx.clone(),
                     model.clone(),
+                    pnk_methods.clone(),
                     extern_methods.clone(),
                     extern_consts.clone(),
                 );
@@ -254,6 +274,7 @@ impl<'a> ProgramToViper<'a> for Program {
                     shared.clone(),
                     method_ctx.clone(),
                     model.clone(),
+                    pnk_methods.clone(),
                     extern_methods.clone(),
                     extern_consts.clone(),
                 );
@@ -274,6 +295,7 @@ impl<'a> ProgramToViper<'a> for Program {
                     shared.clone(),
                     method_ctx.clone(),
                     model.clone(),
+                    pnk_methods.clone(),
                     extern_methods.clone(),
                     extern_consts.clone(),
                 );
@@ -282,7 +304,7 @@ impl<'a> ProgramToViper<'a> for Program {
             })
             .collect::<Result<Vec<_>, _>>()?;
 
-        let program_methods = self
+        let (program_methods, program_abstract_methods): (Vec<_>, Vec<_>) = self
             .functions
             .into_iter()
             .map(|f| {
@@ -294,16 +316,18 @@ impl<'a> ProgramToViper<'a> for Program {
                     shared.clone(),
                     method_ctx.clone(),
                     model.clone(),
+                    pnk_methods.clone(),
                     extern_methods.clone(),
                     extern_consts.clone(),
                 );
                 f.to_viper(&mut ctx)
             })
-            .collect::<Result<Vec<_>, _>>()?;
+            .collect::<Result<Vec<_>, _>>()?.into_iter().unzip();
         let (domains, mut fields, mut methods, fs) = 
             create_viper_prelude(ast, self.model, options);
         methods.extend(abstract_methods.iter());
         methods.extend(program_methods.iter());
+        methods.extend(program_abstract_methods.iter());
         functions.extend(fs.iter());
         fields.extend(self.global_vars.iter().map(|gv| 
             ast.field(&gv.name, gv.typ.to_viper_type(&ctx))));

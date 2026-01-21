@@ -151,6 +151,7 @@ impl App {
             shared.clone(),
             method_ctx,
             model.clone(),
+            program.functions.iter().map(|e| e.fname.to_owned()).collect(),
             program.extern_methods.clone(),
             program.extern_fields.clone(),
         );
