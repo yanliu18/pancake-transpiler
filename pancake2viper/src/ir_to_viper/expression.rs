@@ -309,7 +309,7 @@ impl<'a> TryToViper<'a> for ir::MethodCall {
         ctx.consume_stack = false;
 
         let mut fname = self.fname;
-        if ctx.pnk_methods.contains(&fname) {
+        if ctx.pnk_methods.contains(&fname) && !ctx.options.no_function_call_abstract {
             fname = fname.to_owned() + "___abstract";
         }
 
