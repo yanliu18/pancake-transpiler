@@ -12,7 +12,7 @@ pub enum Type {
     Int,
     Bool,
     Struct(Vec<Shape>),
-    Array,    
+    Array,
     Wildcard,
     Ref,
     Set(Box<Self>),
@@ -293,7 +293,7 @@ impl ir::Program {
             ctx.set_type(format!("f_{}", pred), Type::Bool);
         }
         for (k, v) in &self.extern_consts {
-            ctx.set_type(k.clone(),v.clone());
+            ctx.set_type(k.clone(), v.clone());
         }
         for g in &self.global_vars {
             ctx.insert_field(g.name.clone(), g.typ.clone());

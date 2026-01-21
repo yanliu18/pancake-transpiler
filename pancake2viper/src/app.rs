@@ -2,7 +2,6 @@ use std::collections::HashSet;
 use std::path::Path;
 use std::process::Command;
 use std::rc::Rc;
-use std::time::Instant;
 use std::{fs::File, io::Write};
 
 use crate::cli::{self, CliOptions};
@@ -236,6 +235,46 @@ impl App {
             program.trust_except(&only);
         }
 
+        if self.options.incremental {
+            // firstly, just the external functions
+            let mut single_program = program.clone();
+            single_program.trust_except(&[]);
+            self.do_program(Some("external_only".to_owned()), single_program, ctx.clone(), &mut viper_handle, encode_opts, use_viper_cli)?;
+
+            // now each untrusted function
+            for fun in program.clone().functions {
+                if fun.trusted {
+                    continue;
+                }
+
+                let mut single_program = program.clone();
+                single_program.trust_except(&[fun.fname.to_owned()]);
+                self.do_program(Some(fun.fname.to_owned()), single_program, ctx.clone(), &mut viper_handle, encode_opts, use_viper_cli)?;
+            }
+        } else {
+            self.do_program(None, program, ctx, &mut viper_handle, encode_opts, use_viper_cli)?;
+        }
+
+        Ok(())
+    }
+
+    fn print_name(&self, name: &Option<String>) {
+        match name {
+            Some(s) => self.print(&format!("{}: ", s)),
+            _ => ()
+        }
+    }
+
+    fn do_program(
+        &self,
+        name: Option<String>,
+        program: ir::Program,
+        ctx: TypeContext,
+        viper_handle: &mut ViperHandle,
+        encode_opts: EncodeOptions,
+        use_viper_cli: bool
+    ) -> Result<()> {
+        self.print_name(&name);
         self.println("Transpiling to Viper...");
         let vpr_program = program
             .clone()
@@ -246,80 +285,30 @@ impl App {
 
         // Save the transpiled Viper code in a file
         if let Some(path) = &self.options.cmd.get_output_path() {
-            let mut file = File::create(path)
+            let modified = match &name {
+                Some(s) => match path.rsplit_once(".") {
+                    Some((front, back)) => format!("{}--{}.{}", front, s, back),
+                    None => format!("{}--{}", path, s),
+                },
+                None => path.to_owned(),
+            };
+            let mut file = File::create(modified)
                 .map_err(|e| anyhow!(format!("Error: Could not open output file:\n{}", e)))?;
             file.write_all(transpiled.as_bytes())
                 .map_err(|e| anyhow!(format!("Error: Could not write to output file:\n{}", e)))?;
         }
 
+        self.print_name(&name);
         self.println("Transpilation done.");
         // Verify the Viper code
         if self.options.cmd.is_verify() {
-            if self.options.incremental {
-                let start = Instant::now();
-                // check shared methods
-                if use_viper_cli {
-                    let mut only_shared_program = program.clone();
-                    only_shared_program.trust_except(&[]);
-                    let only_shared =
-                        only_shared_program.to_viper(ctx.clone(), viper_handle.ast, encode_opts)?;
-                    let new_transpiled = self
-                        .add_includes_model(viper_handle.utils.pretty_print(only_shared), true)?;
-                    self.verify(
-                        &mut viper_handle,
-                        only_shared,
-                        new_transpiled,
-                        "*",
-                        use_viper_cli,
-                    )?;
-                }
-
-                // check transpiled Pancake functions
-                let trusted = program
-                    .functions
-                    .iter()
-                    .filter_map(|f| {
-                        if f.trusted {
-                            Some(f.fname.clone())
-                        } else {
-                            None
-                        }
-                    })
-                    .collect::<HashSet<_>>();
-                for only in program.get_method_names().0 {
-                    // skip trusted functions
-                    if trusted.contains(&only) {
-                        continue;
-                    }
-                    println!("\n========== Verifying function '{}' ==========\n", only);
-                    let mut only_program = program.clone();
-                    only_program.trust_except(&[only.clone()]);
-                    let only_vpr =
-                        only_program.to_viper(ctx.clone(), viper_handle.ast, encode_opts)?;
-                    let new_transpiled =
-                        self.add_includes_model(viper_handle.utils.pretty_print(only_vpr), false)?;
-
-                    self.verify(
-                        &mut viper_handle,
-                        only_vpr,
-                        new_transpiled,
-                        &only,
-                        use_viper_cli,
-                    )?;
-                }
-                println!(
-                    "Total verification time: {:.2}s",
-                    start.elapsed().as_secs_f32()
-                );
-            } else {
-                self.verify(
-                    &mut viper_handle,
-                    vpr_program,
-                    transpiled,
-                    "*",
-                    use_viper_cli,
-                )?;
-            }
+            self.verify(
+                viper_handle,
+                vpr_program,
+                transpiled,
+                "*",
+                use_viper_cli,
+            )?;
         }
         Ok(())
     }

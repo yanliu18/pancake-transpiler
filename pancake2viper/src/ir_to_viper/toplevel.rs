@@ -322,7 +322,7 @@ impl<'a> ProgramToViper<'a> for Program {
                 );
                 f.to_viper(&mut ctx)
             })
-            .collect::<Result<Vec<_>, _>>()?.into_iter().unzip();
+            .collect::<Result<Vec<(_, _)>, _>>()?.into_iter().unzip();
         let (domains, mut fields, mut methods, fs) = 
             create_viper_prelude(ast, self.model, options);
         methods.extend(abstract_methods.iter());

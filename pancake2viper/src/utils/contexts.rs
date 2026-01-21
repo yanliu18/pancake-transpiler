@@ -179,7 +179,7 @@ pub struct EncodeOptions {
     pub include_prelude: bool,
     pub allow_undefined_shared: bool,
     pub ignore_warnings: bool,
-    pub no_function_call_abstract: bool,
+    pub function_call_abstract: bool,
 }
 
 impl Default for EncodeOptions {
@@ -195,6 +195,7 @@ impl Default for EncodeOptions {
             include_prelude: true,
             allow_undefined_shared: false,
             ignore_warnings: false,
+            function_call_abstract: false,
         }
     }
 }

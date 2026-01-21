@@ -258,7 +258,7 @@ pub struct ClapCliOptions {
     )]
     pub only: Option<Vec<String>>,
 
-    #[arg(global = true, long, help = "Verifies each function separately")]
+    #[arg(global = true, long, help = "Transpile and verify each function separately")]
     pub incremental: bool,
 
     #[arg(
@@ -271,9 +271,9 @@ pub struct ClapCliOptions {
     #[arg(
         global = true,
         long,
-        help = "Do not model function calls abstractly"
+        help = "Model function calls abstractly"
     )]
-    pub no_function_call_abstract: bool,
+    pub function_call_abstract: bool,
 
     #[arg(global = true, long, short = 'I', help = "Include Viper files")]
     pub include: Option<Vec<String>>,
@@ -303,7 +303,7 @@ pub struct CliOptions {
     pub only: Option<Vec<String>>,
     pub incremental: bool,
     pub trust_model: bool,
-    pub no_function_call_abstract: bool,
+    pub function_call_abstract: bool,
     pub include: Vec<String>,
     pub counter_example: bool,
 }
@@ -331,7 +331,7 @@ impl From<ClapCliOptions> for CliOptions {
             only: value.only,
             incremental: value.incremental,
             trust_model: value.trust_model,
-            no_function_call_abstract: value.no_function_call_abstract,
+            function_call_abstract: value.function_call_abstract,
             include: value.include.unwrap_or_default(),
             counter_example: value.counter_example,
         }
@@ -359,7 +359,7 @@ impl Default for CliOptions {
             only: None,
             incremental: false,
             trust_model: false,
-            no_function_call_abstract: false,
+            function_call_abstract: false,
             include: vec![],
             counter_example: false,
         }
@@ -381,7 +381,7 @@ impl From<CliOptions> for EncodeOptions {
             include_prelude: !value.disable_prelude,
             allow_undefined_shared: value.allow_undefined_shared,
             ignore_warnings: value.ignore_warnings,
-            no_function_call_abstract: value.no_function_call_abstract,
+            function_call_abstract: value.function_call_abstract,
         }
     }
 }
