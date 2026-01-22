@@ -2,6 +2,8 @@ use viper::{AstFactory, Expr, LocalVarDecl};
 
 use crate::ir::{self, Type};
 
+use std::collections::HashSet;
+
 use super::{
     errors::ToViperError, shape::Shape, EncodeOptions, Mangler, TranslationError, TypeContext,
     ViperEncodeCtx,
@@ -83,6 +85,10 @@ pub trait ConstEval {
 
 pub trait ExprSubstitution {
     fn substitute(&mut self, old: &ir::Expr, new: &ir::Expr) -> bool;
+}
+
+pub trait MethodsCalled {
+    fn methods_called(self) -> HashSet<String>;
 }
 
 pub trait ProgramToViper<'a> {

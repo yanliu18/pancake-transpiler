@@ -64,10 +64,7 @@ impl<'a> TryToViper<'a> for FnDec {
         // add a default precondition about heap size: `requires alen(heap) == HEAP_SIZE`
         pres.insert(
             0,
-            ast.eq_cmp(
-                heap_len,
-                ast.int_lit(ctx.options.heap_top as i64),
-            ),
+            ast.eq_cmp(heap_len, ast.int_lit(ctx.options.heap_top as i64)),
         );
 
         posts.extend(self.posts.force_to_bool(ctx)?);
@@ -322,15 +319,21 @@ impl<'a> ProgramToViper<'a> for Program {
                 );
                 f.to_viper(&mut ctx)
             })
-            .collect::<Result<Vec<(_, _)>, _>>()?.into_iter().unzip();
-        let (domains, mut fields, mut methods, fs) = 
-            create_viper_prelude(ast, self.model, options);
+            .collect::<Result<Vec<(_, _)>, _>>()?
+            .into_iter()
+            .unzip();
+        let (domains, mut fields, mut methods, fs) = create_viper_prelude(ast, self.model, options);
         methods.extend(abstract_methods.iter());
         methods.extend(program_methods.iter());
-        methods.extend(program_abstract_methods.iter());
+        if options.function_call_abstract {
+            methods.extend(program_abstract_methods.iter());
+        }
         functions.extend(fs.iter());
-        fields.extend(self.global_vars.iter().map(|gv| 
-            ast.field(&gv.name, gv.typ.to_viper_type(&ctx))));
+        fields.extend(
+            self.global_vars
+                .iter()
+                .map(|gv| ast.field(&gv.name, gv.typ.to_viper_type(&ctx))),
+        );
         Ok(ast.program(&domains, &fields, &functions, &predicates, &methods))
     }
 }

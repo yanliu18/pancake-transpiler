@@ -150,7 +150,11 @@ impl App {
             shared.clone(),
             method_ctx,
             model.clone(),
-            program.functions.iter().map(|e| e.fname.to_owned()).collect(),
+            program
+                .functions
+                .iter()
+                .map(|e| e.fname.to_owned())
+                .collect(),
             program.extern_methods.clone(),
             program.extern_fields.clone(),
         );
@@ -206,9 +210,21 @@ impl App {
         .try_into()?;
         let encode_opts = self.options.clone().into();
 
-        let fields_set = program.model.fields.clone().into_iter().collect::<HashSet<String>>();
-        let consts_set = program.extern_consts.keys().cloned().collect::<HashSet<String>>();
-        let mut mangler_set = fields_set.union(&consts_set).cloned().collect::<HashSet<String>>();
+        let fields_set = program
+            .model
+            .fields
+            .clone()
+            .into_iter()
+            .collect::<HashSet<String>>();
+        let consts_set = program
+            .extern_consts
+            .keys()
+            .cloned()
+            .collect::<HashSet<String>>();
+        let mut mangler_set = fields_set
+            .union(&consts_set)
+            .cloned()
+            .collect::<HashSet<String>>();
         mangler_set.extend(program.global_vars.iter().map(|gv| gv.name.clone()));
 
         run_step!(self, "Mangling", {
@@ -239,7 +255,15 @@ impl App {
             // firstly, just the external functions
             let mut single_program = program.clone();
             single_program.trust_except(&[]);
-            self.do_program(Some("external_only".to_owned()), single_program, ctx.clone(), &mut viper_handle, encode_opts, use_viper_cli)?;
+            self.do_program(
+                Some("top_level".to_owned()),
+                single_program,
+                ctx.clone(),
+                &mut viper_handle,
+                encode_opts,
+                use_viper_cli,
+                true,
+            )?;
 
             // now each untrusted function
             for fun in program.clone().functions {
@@ -249,10 +273,27 @@ impl App {
 
                 let mut single_program = program.clone();
                 single_program.trust_except(&[fun.fname.to_owned()]);
-                self.do_program(Some(fun.fname.to_owned()), single_program, ctx.clone(), &mut viper_handle, encode_opts, use_viper_cli)?;
+                single_program.prune_uncalled();
+                self.do_program(
+                    Some(fun.fname.to_owned()),
+                    single_program,
+                    ctx.clone(),
+                    &mut viper_handle,
+                    encode_opts,
+                    use_viper_cli,
+                    false,
+                )?;
             }
         } else {
-            self.do_program(None, program, ctx, &mut viper_handle, encode_opts, use_viper_cli)?;
+            self.do_program(
+                None,
+                program,
+                ctx,
+                &mut viper_handle,
+                encode_opts,
+                use_viper_cli,
+                true,
+            )?;
         }
 
         Ok(())
@@ -261,7 +302,7 @@ impl App {
     fn print_name(&self, name: &Option<String>) {
         match name {
             Some(s) => self.print(&format!("{}: ", s)),
-            _ => ()
+            _ => (),
         }
     }
 
@@ -272,7 +313,8 @@ impl App {
         ctx: TypeContext,
         viper_handle: &mut ViperHandle,
         encode_opts: EncodeOptions,
-        use_viper_cli: bool
+        use_viper_cli: bool,
+        refute_in_includes: bool,
     ) -> Result<()> {
         self.print_name(&name);
         self.println("Transpiling to Viper...");
@@ -281,7 +323,7 @@ impl App {
             .to_viper(ctx.clone(), viper_handle.ast, encode_opts)?;
         let transpiled = viper_handle.utils.pretty_print(vpr_program);
 
-        let transpiled = self.add_includes_model(transpiled, true)?;
+        let transpiled = self.add_includes_model(transpiled, refute_in_includes)?;
 
         // Save the transpiled Viper code in a file
         if let Some(path) = &self.options.cmd.get_output_path() {
@@ -302,13 +344,7 @@ impl App {
         self.println("Transpilation done.");
         // Verify the Viper code
         if self.options.cmd.is_verify() {
-            self.verify(
-                viper_handle,
-                vpr_program,
-                transpiled,
-                "*",
-                use_viper_cli,
-            )?;
+            self.verify(viper_handle, vpr_program, transpiled, "*", use_viper_cli)?;
         }
         Ok(())
     }

@@ -4,7 +4,9 @@ use viper::AstFactory;
 
 use crate::{
     ir,
-    utils::{ExprSubstitution, Shape, ToType, TranslationError, TryToShape, ViperUtils},
+    utils::{
+        ExprSubstitution, MethodsCalled, Shape, ToType, TranslationError, TryToShape, ViperUtils,
+    },
 };
 
 use super::{
@@ -299,7 +301,7 @@ impl ExprSubstitution for Vec<Expr> {
 impl From<Arg> for Expr {
     fn from(value: Arg) -> Self {
         Expr::Var(ir::Var {
-            name: value.name.clone(), 
+            name: value.name.clone(),
             global: None,
         })
     }
@@ -352,6 +354,23 @@ impl Program {
             .collect::<Vec<_>>();
         self.exclude_functions(&exclude_list);
     }
+
+    pub fn prune_uncalled(&mut self) {
+        let calling_methods = self.functions.clone().into_iter().filter(|f| !f.trusted);
+        let called_method_names = calling_methods
+            .clone()
+            .map(|m| m.body.methods_called())
+            .flat_map(|s| s)
+            .collect::<HashSet<_>>();
+        let called_methods = self
+            .functions
+            .clone()
+            .into_iter()
+            .filter(|e| called_method_names.contains(&e.fname))
+            .chain(calling_methods.into_iter())
+            .collect::<Vec<_>>();
+        self.functions = called_methods;
+    }
 }
 
 impl Model {
@@ -360,7 +379,8 @@ impl Model {
         ast: AstFactory<'a>,
         heap_vars: Vec<(viper::LocalVarDecl<'a>, viper::Expr<'a>)>,
     ) -> (Vec<viper::LocalVarDecl<'a>>, Vec<viper::Expr<'a>>) {
-        heap_vars.into_iter()
+        heap_vars
+            .into_iter()
             .chain(
                 self.fields
                     .iter()
