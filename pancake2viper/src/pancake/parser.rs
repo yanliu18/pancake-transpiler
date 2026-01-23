@@ -32,10 +32,10 @@ impl SExprParser {}
 
 impl SexprFactory for SExprParser {
     type Sexpr = SExpr;
-    type Integer = i64;
+    type Integer = u64;
     type Float = f64;
 
-    fn int(&mut self, x: i64) -> Self::Sexpr {
+    fn int(&mut self, x: u64) -> Self::Sexpr {
         SExpr::Int(x as u64)
     }
 
@@ -64,7 +64,7 @@ impl Expr {
     fn parse(s: &[SExpr]) -> anyhow::Result<Self> {
         match s {
             [Symbol(cons), Symbol(word)] if cons == "Const" && word.starts_with("0x") => {
-                Ok(Self::Const(u64::from_str_radix(&word[2..], 16)? as i64))
+                Ok(Self::Const(u64::from_str_radix(&word[2..], 16)?))
             }
             [Symbol(var), Symbol(scope), Symbol(name)] if var == "Var" => {
                 Ok(Self::Var(Var {name: name.clone(), global: scope == "global"}))

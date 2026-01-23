@@ -7,7 +7,7 @@ impl TryToShape for ir::Type {
     fn to_shape(&self, _ctx: &TypeContext) -> Result<Shape, TranslationError> {
         use ir::Type::*;
         Ok(match self {
-            Bool | Int => Shape::Simple,
+            Bool | Int | Word => Shape::Simple,
             Struct(shape) => Shape::Nested(shape.clone()),
             // x => panic!("Toshape of type {:?}", x),
             _ => Shape::Nested(vec![Shape::Simple; 16 * 1024]), // FIXME: this is a hack to have unbounded IArrays working

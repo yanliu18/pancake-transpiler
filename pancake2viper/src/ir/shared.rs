@@ -5,8 +5,8 @@ use std::{collections::HashSet, fmt::Display};
 
 #[derive(Clone, Default)]
 pub struct SharedContext {
-    read_addresses: HashSet<i64>,
-    write_addresses: HashSet<i64>,
+    read_addresses: HashSet<u64>,
+    write_addresses: HashSet<u64>,
     mappings: [Vec<SharedInternal>; 4],
 }
 
@@ -15,10 +15,10 @@ struct SharedInternal {
     name: String,
     typ: SharedPerm,
     size: MemOpBytes,
-    addresses: Vec<i64>,
-    lower: i64,
-    upper: i64,
-    stride: i64,
+    addresses: Vec<u64>,
+    lower: u64,
+    upper: u64,
+    stride: u64,
 }
 
 impl SharedInternal {
@@ -31,19 +31,19 @@ impl SharedInternal {
         let ast = ctx.ast;
         if self.addresses.len() <= 3 {
             let mut addresses = self.addresses.iter();
-            let init = ast.eq_cmp(addr, ast.int_lit(*addresses.next().unwrap()));
+            let init = ast.eq_cmp(addr, ast.backend_bv64_lit(*addresses.next().unwrap()));
             addresses.fold(init, |acc, e| {
-                ast.or(acc, ast.eq_cmp(addr, ast.int_lit(*e)))
+                ast.bv_or(acc, ast.eq_cmp(addr, ast.backend_bv64_lit(*e)))
             })
         } else {
             let range = ast.and(
-                ast.le_cmp(ast.int_lit(self.lower), addr),
-                ast.lt_cmp(addr, ast.int_lit(self.upper)),
+                ast.bv_ule(ast.backend_bv64_lit(self.lower), addr),
+                ast.bv_ult(addr, ast.backend_bv64_lit(self.upper)),
             );
             let offset = self.lower % self.stride;
             let stride = ast.eq_cmp(
-                ast.module(addr, ast.int_lit(self.stride)),
-                ast.int_lit(offset),
+                ast.bv_mod(addr, ast.backend_bv64_lit(self.stride)),
+                ast.backend_bv64_lit(offset),
             );
             ast.and(range, stride)
         }
@@ -55,9 +55,9 @@ impl SharedInternal {
         model: &Model,
     ) -> Result<Vec<viper::Method<'a>>, ToViperError> {
         let ast = ctx.ast;
-        let addr = ast.new_var("addr", ast.int_type());
-        let retval = ast.new_var(ctx.return_var_name(), ast.int_type());
-        let value = ast.new_var("value", ast.int_type());
+        let addr = ast.new_var("addr", ast.backend_bv64_type());
+        let retval = ast.new_var(ctx.return_var_name(), ast.backend_bv64_type());
+        let value = ast.new_var("value", ast.backend_bv64_type());
         let mut methods = vec![];
         if self.typ.is_read() {
             let mut pres = model.predicates.clone().to_viper(ctx)?;
@@ -96,7 +96,7 @@ impl SharedInternal {
     }
 }
 
-fn get_const(expr: &Expr) -> i64 {
+fn get_const(expr: &Expr) -> u64 {
     if let Expr::Const(i) = expr {
         return *i;
     }
@@ -137,7 +137,7 @@ impl SharedContext {
         let addresses = (lower..upper).step_by(stride as usize);
 
         for addr in addresses.clone() {
-            for offset in 0..(shared.bits as i64 / 8) {
+            for offset in 0..(shared.bits / 8) {
                 if shared.typ.is_read()
                     && !self.read_addresses.insert(addr + offset)
                     && !options.ignore_warnings
@@ -174,7 +174,7 @@ impl SharedContext {
 
     pub fn get_method_name(
         &self,
-        addr: i64,
+        addr: u64,
         options: EncodeOptions,
         op: SharedOpType,
         size: MemOpBytes,

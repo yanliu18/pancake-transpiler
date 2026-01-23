@@ -4,6 +4,7 @@ use viper::{
     smt_manager::SmtManager, AstFactory, AstUtils, Expr, LocalVarDecl, Type, VerificationContext,
     Verifier, Viper,
 };
+use viper::{BinOpBv, BvSize::BV64, UnOpBv};
 
 use super::ViperUtils;
 
@@ -80,6 +81,27 @@ impl ViperHandle {
     }
 }
 
+macro_rules! bv_binop {
+    ($func_name:ident, $y:ident) => {
+        fn $func_name(&self, a: Expr<'a>, b: Expr<'a>) -> Expr<'a> {
+            self.bv_binop(BinOpBv::$y, BV64, a, b)
+        }
+    };
+}
+
+macro_rules! bv_binop2 {
+    ($func_name:ident, $y:ident) => {
+        fn $func_name(&self, a: Expr<'a>, b: Expr<'a>) -> Expr<'a> {
+            self.func_app(
+                ("bv64_".to_owned() + stringify!($y)).as_str(),
+                &[a, b],
+                self.backend_bv64_type(),
+                self.no_position()
+            )
+        }
+    }
+}
+
 impl<'a> ViperUtils<'a> for AstFactory<'a> {
     fn seq_slice(&self, seq: Expr<'a>, lower: Expr<'a>, upper: Expr<'a>) -> Expr<'a> {
         self.seq_drop(self.seq_take(seq, upper), lower)
@@ -89,17 +111,71 @@ impl<'a> ViperUtils<'a> for AstFactory<'a> {
         (self.local_var_decl(name, typ), self.local_var(name, typ))
     }
 
-    fn zero(&self) -> Expr<'a> {
+    fn int_zero(&self) -> Expr<'a> {
         self.int_lit(0)
     }
 
-    fn one(&self) -> Expr<'a> {
+    fn int_one(&self) -> Expr<'a> {
         self.int_lit(1)
     }
 
-    fn two(&self) -> Expr<'a> {
+    fn int_two(&self) -> Expr<'a> {
         self.int_lit(2)
     }
+
+    fn bv_zero(&self) -> Expr<'a> {
+        self.backend_bv64_lit(0)
+    }
+
+    fn bv_one(&self) -> Expr<'a> {
+        self.backend_bv64_lit(1)
+    }
+
+    fn bv_two(&self) -> Expr<'a> {
+        self.backend_bv64_lit(2)
+    }
+
+    fn bv_lit(&self, val: u64) -> Expr<'a> {
+        self.backend_bv64_lit(val)
+    }
+
+    fn bv_not(&self, a: Expr<'a>) -> Expr<'a> {
+        self.func_app(
+            "bv64_not",
+            &[a],
+            self.backend_bv64_type(),
+            self.no_position()
+        )
+    }
+
+    fn bv_neg(&self, a: Expr<'a>) -> Expr<'a> {
+        self.func_app(
+            "bv64_neg",
+            &[a],
+            self.backend_bv64_type(),
+            self.no_position()
+        )
+    }
+
+    bv_binop!(bv_and, BitAnd);
+    bv_binop!(bv_or, BitOr);
+    bv_binop!(bv_xor, BitXor);
+    bv_binop!(bv_add, BvAdd);
+    bv_binop!(bv_sub, BvSub);
+    bv_binop!(bv_mul, BvMul);
+    bv_binop!(bv_div, BvUDiv);
+    bv_binop2!(bv_mod, udiv);
+    bv_binop2!(bv_ule, ule);
+    bv_binop2!(bv_uge, uge);
+    bv_binop2!(bv_ult, ult);
+    bv_binop2!(bv_ugt, ugt);
+    bv_binop2!(bv_sle, sle);
+    bv_binop2!(bv_sge, sge);
+    bv_binop2!(bv_slt, slt);
+    bv_binop2!(bv_sgt, sgt);
+    bv_binop!(bv_shl, BvShl);
+    bv_binop!(bv_lshr, BvLShr);
+    bv_binop!(bv_ashr, BvAShr);
 }
 
 //pub struct Position {

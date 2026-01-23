@@ -194,6 +194,7 @@ impl Display for Type {
         match self {
             Self::Int => write!(f, "Int"),
             Self::Bool => write!(f, "Bool"),
+            Self::Word => write!(f, "BitVectorDomain64"),
             Self::Struct(s) => write!(f, "{}", Shape::Nested(s.to_vec())),
             Self::Wildcard => write!(f, "*"),
             Self::Void => write!(f, "Void"),

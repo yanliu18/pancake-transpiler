@@ -95,7 +95,7 @@ impl Type {
     pub fn len(&self) -> usize {
         match self {
             Type::Void => 0,
-            Type::Int | Type::Bool => 1,
+            Type::Word | Type::Int | Type::Bool => 1,
             Type::Struct(inner) => inner.iter().map(Shape::len).sum(),
             _ => panic!("Unbounded length"),
         }
@@ -117,10 +117,10 @@ impl ToType for BinOpType {
                 if is_annot {
                     Type::Bool
                 } else {
-                    Type::Int
+                    Type::Word
                 }
             }
-            Add | Sub | Mul | Div | Modulo | BitOr | BitAnd | BitXor => Type::Int,
+            Add | Sub | Mul | Div | Modulo | BitOr | BitAnd | BitXor => Type::Word,
         }
     }
 }
@@ -128,22 +128,22 @@ impl ToType for BinOpType {
 impl ToType for UnOpType {
     fn to_type(&self, is_annot: bool) -> super::Type {
         match self {
-            UnOpType::Minus => Type::Int,
+            UnOpType::Minus => Type::Word,
             UnOpType::Neg => {
                 if is_annot {
                     Type::Bool
                 } else {
-                    Type::Int
+                    Type::Word
                 }
             }
         }
     }
 }
 
-impl Add<i64> for Expr {
+impl Add<u64> for Expr {
     type Output = Self;
 
-    fn add(self, rhs: i64) -> Self::Output {
+    fn add(self, rhs: u64) -> Self::Output {
         Expr::BinOp(BinOp {
             optype: BinOpType::Add,
             left: Box::new(self),
@@ -153,9 +153,9 @@ impl Add<i64> for Expr {
 }
 
 impl UnOpType {
-    pub fn eval(&self, value: i64) -> i64 {
+    pub fn eval(&self, value: u64) -> u64 {
         match self {
-            Self::Minus => -value,
+            Self::Minus => 0 - value,
             Self::Neg => {
                 if value == 0 {
                     1
@@ -183,7 +183,7 @@ impl BinOpType {
         !(self.is_bitwise() || self.is_bitwise())
     }
 
-    pub fn eval(&self, lhs: i64, rhs: i64) -> i64 {
+    pub fn eval(&self, lhs: u64, rhs: u64) -> u64 {
         match self {
             Self::Add => lhs + rhs,
             Self::BitAnd => lhs & rhs,
@@ -218,11 +218,11 @@ impl BinOpType {
 }
 
 impl ShiftType {
-    pub fn eval(&self, lhs: i64, rhs: u64) -> i64 {
+    pub fn eval(&self, lhs: u64, rhs: u64) -> u64 {
         match self {
             ShiftType::Asr => lhs >> rhs,
             ShiftType::Lsl => lhs << rhs,
-            ShiftType::Lsr => ((lhs as u64) >> rhs) as i64,
+            ShiftType::Lsr => ((lhs as u64) >> rhs) as u64,
         }
     }
 }

@@ -103,7 +103,32 @@ pub trait ProgramToViper<'a> {
 pub trait ViperUtils<'a> {
     fn new_var(&self, name: &str, typ: viper::Type) -> (LocalVarDecl<'a>, Expr<'a>);
     fn seq_slice(&self, seq: Expr<'a>, lower: Expr<'a>, upper: Expr<'a>) -> Expr<'a>;
-    fn zero(&self) -> Expr<'a>;
-    fn one(&self) -> Expr<'a>;
-    fn two(&self) -> Expr<'a>;
+    fn int_zero(&self) -> Expr<'a>;
+    fn int_one(&self) -> Expr<'a>;
+    fn int_two(&self) -> Expr<'a>;
+    fn bv_zero(&self) -> Expr<'a>;
+    fn bv_one(&self) -> Expr<'a>;
+    fn bv_two(&self) -> Expr<'a>;
+    fn bv_lit(&self, val: u64) -> Expr<'a>;
+    fn bv_not(&self, a: Expr<'a>) -> Expr<'a>;
+    fn bv_and(&self, a: Expr<'a>, b: Expr<'a>) -> Expr<'a>;
+    fn bv_or(&self, a: Expr<'a>, b: Expr<'a>) -> Expr<'a>;
+    fn bv_xor(&self, a: Expr<'a>, b: Expr<'a>) -> Expr<'a>;
+    fn bv_add(&self, a: Expr<'a>, b: Expr<'a>) -> Expr<'a>;
+    fn bv_sub(&self, a: Expr<'a>, b: Expr<'a>) -> Expr<'a>;
+    fn bv_neg(&self, a: Expr<'a>) -> Expr<'a>;
+    fn bv_mul(&self, a: Expr<'a>, b: Expr<'a>) -> Expr<'a>;
+    fn bv_div(&self, a: Expr<'a>, b: Expr<'a>) -> Expr<'a>;
+    fn bv_mod(&self, a: Expr<'a>, b: Expr<'a>) -> Expr<'a>;
+    fn bv_ule(&self, a: Expr<'a>, b: Expr<'a>) -> Expr<'a>;
+    fn bv_uge(&self, a: Expr<'a>, b: Expr<'a>) -> Expr<'a>;
+    fn bv_ult(&self, a: Expr<'a>, b: Expr<'a>) -> Expr<'a>;
+    fn bv_ugt(&self, a: Expr<'a>, b: Expr<'a>) -> Expr<'a>;
+    fn bv_sle(&self, a: Expr<'a>, b: Expr<'a>) -> Expr<'a>;
+    fn bv_sge(&self, a: Expr<'a>, b: Expr<'a>) -> Expr<'a>;
+    fn bv_slt(&self, a: Expr<'a>, b: Expr<'a>) -> Expr<'a>;
+    fn bv_sgt(&self, a: Expr<'a>, b: Expr<'a>) -> Expr<'a>;
+    fn bv_shl(&self, a: Expr<'a>, b: Expr<'a>) -> Expr<'a>;
+    fn bv_lshr(&self, a: Expr<'a>, b: Expr<'a>) -> Expr<'a>;
+    fn bv_ashr(&self, a: Expr<'a>, b: Expr<'a>) -> Expr<'a>;
 }

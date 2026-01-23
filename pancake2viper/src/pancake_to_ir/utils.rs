@@ -22,7 +22,7 @@ impl<T: TryToIR, const N: usize> TryToIR for [T; N] {
 impl ToType for Shape {
     fn to_type(&self, _is_annot: bool) -> Type {
         match self {
-            Self::Simple => Type::Int,
+            Self::Simple => Type::Word,
             Self::Nested(inner) => Type::Struct(inner.clone()),
         }
     }

@@ -19,25 +19,30 @@ pub fn create_bv_domain(ast: AstFactory) -> Domain {
         Some("(_ bv2int 64)".into()),
     );
 
-    let not = ast.domain_func_with_interpretation(
-        "not",
-        &[ast.local_var_decl("a", bv64)],
-        bv64,
-        false,
-        "BitVectorDomain64",
-        Some("bvnot".into()),
-    );
-
     ast.domain_with_interpretation(
         "BitVectorDomain64",
         &[
-            not,
-            create_bv_function(ast, "xor"),
-            create_bv_function(ast, "and"),
-            create_bv_function(ast, "or"),
-            create_bv_function(ast, "shl"),
-            create_bv_function(ast, "lshr"),
-            create_bv_function(ast, "ashr"),
+            create_bv_un_function(ast, "not"),
+            create_bv_bin_function(ast, "and"),
+            create_bv_bin_function(ast, "or"),
+            create_bv_bin_function(ast, "xor"),
+            create_bv_bin_function(ast, "add"),
+            create_bv_bin_function(ast, "sub"),
+            create_bv_un_function(ast, "neg"),
+            create_bv_bin_function(ast, "mul"),
+            create_bv_bin_function(ast, "udiv"),
+            create_bv_bin_function(ast, "urem"),
+            create_bv_bin_bool_function(ast, "ule"),
+            create_bv_bin_bool_function(ast, "uge"),
+            create_bv_bin_bool_function(ast, "ult"),
+            create_bv_bin_bool_function(ast, "ugt"),
+            create_bv_bin_bool_function(ast, "sle"),
+            create_bv_bin_bool_function(ast, "sge"),
+            create_bv_bin_bool_function(ast, "slt"),
+            create_bv_bin_bool_function(ast, "sgt"),
+            create_bv_bin_function(ast, "shl"),
+            create_bv_bin_function(ast, "lshr"),
+            create_bv_bin_function(ast, "ashr"),
             from_int,
             to_int,
         ],
@@ -50,7 +55,20 @@ pub fn create_bv_domain(ast: AstFactory) -> Domain {
     )
 }
 
-fn create_bv_function<'a>(ast: AstFactory<'a>, name: &str) -> DomainFunc<'a> {
+fn create_bv_un_function<'a>(ast: AstFactory<'a>, name: &str) -> DomainFunc<'a> {
+    let bv64 = ast.backend_bv64_type();
+    let a = ast.local_var_decl("a", bv64);
+    ast.domain_func_with_interpretation(
+        &format!("bv64_{}", name),
+        &[a],
+        bv64,
+        false,
+        "BitVectorDomain64",
+        Some(format!("bv{}", name)),
+    )
+}
+
+fn create_bv_bin_function<'a>(ast: AstFactory<'a>, name: &str) -> DomainFunc<'a> {
     let bv64 = ast.backend_bv64_type();
     let a = ast.local_var_decl("a", bv64);
     let b = ast.local_var_decl("b", bv64);
@@ -58,6 +76,20 @@ fn create_bv_function<'a>(ast: AstFactory<'a>, name: &str) -> DomainFunc<'a> {
         &format!("bv64_{}", name),
         &[a, b],
         bv64,
+        false,
+        "BitVectorDomain64",
+        Some(format!("bv{}", name)),
+    )
+}
+
+fn create_bv_bin_bool_function<'a>(ast: AstFactory<'a>, name: &str) -> DomainFunc<'a> {
+    let bv64 = ast.backend_bv64_type();
+    let a = ast.local_var_decl("a", bv64);
+    let b = ast.local_var_decl("b", bv64);
+    ast.domain_func_with_interpretation(
+        &format!("bv64_{}", name),
+        &[a, b],
+        ast.bool_type(),
         false,
         "BitVectorDomain64",
         Some(format!("bv{}", name)),

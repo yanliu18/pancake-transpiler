@@ -38,7 +38,7 @@ impl ConstEvalExpr for Expr {
             UnOp(u) => u.const_eval(options),
             Shift(s) => s.const_eval(options),
             BaseAddr => Const(0),
-            BytesInWord => Const(options.word_size as i64 / 8),
+            BytesInWord => Const(options.word_size / 8),
             MethodCall(m) => MethodCall(ir::MethodCall {
                 fname: m.fname,
                 args: const_eval_vec(m.args, options),
@@ -147,7 +147,7 @@ impl ConstEvalExpr for Shift {
                 let const_value = match self.shifttype {
                     ShiftType::Asr => v >> self.amount,
                     ShiftType::Lsl => v << self.amount,
-                    ShiftType::Lsr => ((v as u64) >> self.amount) as i64,
+                    ShiftType::Lsr => (v as u64) >> self.amount,
                 };
                 Expr::Const(const_value)
             }

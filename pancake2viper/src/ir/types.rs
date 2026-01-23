@@ -11,6 +11,7 @@ pub enum Type {
     Void,
     Int,
     Bool,
+    Word,
     Struct(Vec<Shape>),
     Array,
     Wildcard,
@@ -28,9 +29,9 @@ impl ExprTypeResolution for ir::Expr {
     ) -> Result<Type, TranslationError> {
         use ir::Expr::*;
         match self {
-            Const(_) | LoadBits(_) | Shift(_) | BaseAddr | BytesInWord => Ok(Type::Int),
+            Const(_) | LoadBits(_) | Shift(_) | BaseAddr | BytesInWord => Ok(Type::Word),
             BoolLit(_) if is_annot => Ok(Type::Bool),
-            BoolLit(_) => Ok(Type::Int),
+            BoolLit(_) => Ok(Type::Word),
             ArrayAccess(acc) => acc.resolve_expr_type(is_annot, ctx),
             BinOp(op) => op.resolve_expr_type(is_annot, ctx),
             UnOp(op) => op.resolve_expr_type(is_annot, ctx),
@@ -63,7 +64,7 @@ impl ExprTypeResolution for ir::ArrayAccess {
         ctx: &mut TypeContext,
     ) -> Result<Type, TranslationError> {
         let obj_type = self.obj.resolve_expr_type(is_annot, ctx)?;
-        assert_eq!(self.idx.resolve_expr_type(is_annot, ctx)?, Type::Int);
+        assert_eq!(self.idx.resolve_expr_type(is_annot, ctx)?, Type::Word);
         match obj_type {
             Type::Struct(inner) => Ok(match *self.idx {
                 Expr::Const(i) => inner[i as usize].to_type(is_annot),
@@ -76,7 +77,7 @@ impl ExprTypeResolution for ir::ArrayAccess {
                 }
             }),
             Type::Seq(i) => Ok(*i),
-            Type::Array => Ok(Type::Int),
+            Type::Array => Ok(Type::Word),
             _ => Err(TranslationError::ShapeError(IRSimpleShapeFieldAccess(
                 *self.obj.clone(),
             ))),
@@ -279,7 +280,7 @@ impl ir::Program {
         let mut prev_size = ctx.size();
 
         for ffi in &self.extern_methods {
-            ctx.set_type(ffi.clone(), Type::Int);
+            ctx.set_type(ffi.clone(), Type::Word);
         }
         for field in &self.model.fields {
             ctx.set_type(field.to_string(), Type::Ref);

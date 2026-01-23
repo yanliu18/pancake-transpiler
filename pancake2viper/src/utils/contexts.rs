@@ -6,8 +6,7 @@ use std::{
 use viper::{AstFactory, Declaration, LocalVarDecl};
 
 use crate::{
-    ir::{self, shared::SharedContext, types::Type, AnnotationType, FnDec, Model},
-    viper_prelude::{utils::Utils, HeapHelper},
+    ir::{self, AnnotationType, FnDec, Model, shared::SharedContext, types::Type}, utils::ViperUtils, viper_prelude::{HeapHelper, utils::Utils}
 };
 
 use super::{mangler::Mangler, TranslationError, RESERVED};
@@ -322,7 +321,7 @@ impl<'a> ViperEncodeCtx<'a> {
     pub fn gv_access(&self, name: &String) -> viper::Expr<'a> {
         let ast = self.ast;
         let var= self.utils.gv_ref();
-        ast.field_access(var.1, ast.field(name, ast.int_type()))
+        ast.field_access(var.1, ast.field(name, ast.backend_bv64_type()))
     }
 
     pub fn set_mode(&mut self, mode: TranslationMode) {
@@ -363,9 +362,9 @@ impl<'a> ViperEncodeCtx<'a> {
 
     pub fn word_values(&self) -> viper::Expr<'a> {
         let ast = self.ast;
-        ast.mul(
-            ast.int_lit(4),
-            ast.int_lit(2i64.pow(self.options.word_size as u32 - 2)),
+        ast.bv_mul(
+            ast.backend_bv64_lit(4),
+            ast.backend_bv64_lit(2u64.pow(self.options.word_size as u32 - 2)),
         )
     }
 

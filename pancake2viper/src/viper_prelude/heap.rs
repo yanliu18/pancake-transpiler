@@ -25,7 +25,7 @@ impl<'a> HeapHelper<'a> {
         let iarray_type = ast.domain_type(domain_name, &[], &[]);
         let (a_decl, a) = ast.new_var("a", iarray_type);
         let (r_decl, _r) = ast.new_var("r", ast.ref_type());
-        let (i_decl, i) = ast.new_var("i", ast.int_type());
+        let (i_decl, i) = ast.new_var("i", ast.backend_bv64_type());
 
         let slot_f = ast.domain_func(
             "slot",
@@ -34,9 +34,9 @@ impl<'a> HeapHelper<'a> {
             false,
             domain_name,
         );
-        let len_f = ast.domain_func("alen", &[a_decl], ast.int_type(), false, domain_name);
+        let len_f = ast.domain_func("alen", &[a_decl], ast.backend_bv64_type(), false, domain_name);
         let first_f = ast.domain_func("first", &[r_decl], iarray_type, false, domain_name);
-        let second_f = ast.domain_func("second", &[r_decl], ast.int_type(), false, domain_name);
+        let second_f = ast.domain_func("second", &[r_decl], ast.backend_bv64_type(), false, domain_name);
         let functions = [slot_f, len_f, first_f, second_f];
 
         let slot_a_i_app = ast.domain_func_app(slot_f, &[a, i], &[]);
@@ -60,7 +60,7 @@ impl<'a> HeapHelper<'a> {
             ast.forall(
                 &[a_decl],
                 &[ast.trigger(&[len_app])],
-                ast.ge_cmp(len_app, ast.zero()),
+                ast.bv_uge(len_app, ast.bv_zero()),
             ),
             domain_name,
         );
@@ -111,25 +111,25 @@ impl<'a> HeapHelper<'a> {
 
     /// Field of an IArray: local Pancake memory
     pub fn field_local(&self) -> Field<'a> {
-        self.ast.field("local_mem", self.ast.int_type())
+        self.ast.field("local_mem", self.ast.backend_bv64_type())
     }
 
     /// Field of an IArray: shared memory
     pub fn field_shared(&self) -> Field<'a> {
-        self.ast.field("shared_mem", self.ast.int_type())
+        self.ast.field("shared_mem", self.ast.backend_bv64_type())
     }
 
     /// Encodes the following predicate for slice access of an IArray
     /// ```viper
-    /// predicate slice_acc(src: Heap, idx: Int, length: Int) {
+    /// predicate slice_acc(src: Heap, idx: BitVectorDomain64, length: BitVectorDomain64) {
     ///     forall j: Int :: 0 <= idx <= j < idx + length <= |src| ==> acc(slot(src, j).heap_elem)
     /// }
     /// ```
-    pub fn slice_acc_def(&self, biw_size: i64) -> Predicate<'a> {
+    pub fn slice_acc_def(&self, biw_size: u64) -> Predicate<'a> {
         let ast = self.ast;
         let (src_decl, src) = ast.new_var("src", self.get_type());
-        let (idx_decl, idx) = ast.new_var("idx", ast.int_type());
-        let (length_decl, length) = ast.new_var("length", ast.int_type());
+        let (idx_decl, idx) = ast.new_var("idx", ast.backend_bv64_type());
+        let (length_decl, length) = ast.new_var("length", ast.backend_bv64_type());
         let (perm_decl, perm) = ast.new_var("perm", ast.perm_type());
         self.ast.predicate(
             "slice_acc",
@@ -144,11 +144,11 @@ impl<'a> HeapHelper<'a> {
     ///     forall j: Int ::0 <= j < alen(heap) ==> acc(heap[j].heap_elem)
     /// }
     /// ```
-    pub fn full_acc_def(&self, biw_size: i64) -> Predicate<'a> {
+    pub fn full_acc_def(&self, biw_size: u64) -> Predicate<'a> {
         let ast = self.ast;
         let (src_decl, src) = ast.new_var("src", self.get_type());
         let (perm_decl, perm) = ast.new_var("perm", ast.perm_type());
-        let l = ast.zero();
+        let l = ast.int_zero();
         let h = self.len_f(src);
         self.ast.predicate(
             "slice_acc",
@@ -161,19 +161,19 @@ impl<'a> HeapHelper<'a> {
     /// ```viper
     ///     forall j: Int :: 0 <= low <= j < upper <= alen(heap) ==> acc(heap[j].heap_elem)
     /// ```
-    pub fn heap_acc_expr(&self, array: Expr, low: Expr, upper: Expr, typ: SliceType, perm: Expr, _biw_size: i64) -> Expr<'a> {
+    pub fn heap_acc_expr(&self, array: Expr, low: Expr, upper: Expr, typ: SliceType, perm: Expr, _biw_size: u64) -> Expr<'a> {
         let ast: AstFactory<'a> = self.ast;
-        let (j_decl, j) = ast.new_var("j", ast.int_type());
-        let zero = ast.zero();
+        let (j_decl, j) = ast.new_var("j", ast.backend_bv64_type());
+        let zero = ast.bv_zero();
         let limit = self.len_f(array);
 
-        let i0 = ast.le_cmp(zero, low);
-        let ij = ast.le_cmp(low, j);
+        let i0 = ast.bv_ule(zero, low);
+        let ij = ast.bv_ule(low, j);
         let jl = match typ {
-            SliceType::Exclusive => ast.lt_cmp(j, upper),
-            SliceType::Inclusive => ast.le_cmp(j, upper),
+            SliceType::Exclusive => ast.bv_ult(j, upper),
+            SliceType::Inclusive => ast.bv_ule(j, upper),
         };
-        let lu = ast.le_cmp(upper, limit);
+        let lu = ast.bv_ule(upper, limit);
         // let bytes_in_word = ast.int_lit(biw_size);
         // let align = ast.eq_cmp(ast.module(j, bytes_in_word), ast.int_lit(0));
         let guard = ast.and(ast.and(i0, ij), ast.and(jl, lu));

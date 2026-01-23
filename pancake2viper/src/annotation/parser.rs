@@ -72,13 +72,13 @@ pub fn parse_shared(shared: &str) -> ParseResult<Shared> {
                 Rule::expr => {
                     let lower = parse_expr(Pairs::single(addr));
                     let upper = lower.clone() + 1;
-                    (lower, upper, Expr::Const(bits as i64 / 8))
+                    (lower, upper, Expr::Const(bits / 8))
                 }
                 Rule::shared_range => {
                     let mut inner = addr.into_inner();
                     let lower = parse_expr(Pairs::single(inner.next().unwrap()));
                     let upper = parse_expr(Pairs::single(inner.next().unwrap()));
-                    (lower, upper, Expr::Const(bits as i64 / 8))
+                    (lower, upper, Expr::Const(bits / 8))
                 }
                 Rule::shared_stride => {
                     let mut inner = addr.into_inner();
@@ -272,7 +272,7 @@ fn parse_expr(pairs: Pairs<Rule>) -> Expr {
     PRATT_PARSER
         .map_primary(|primary| match primary.as_rule() {
             Rule::struc => Expr::Struct(Struct::from_pest(primary)),
-            Rule::int_lit => Expr::Const(i64::from_pest(primary)),
+            Rule::int_lit => Expr::Const(u64::from_pest(primary)),
             Rule::quantified => Expr::Quantified(Quantified::from_pest(primary)),
             Rule::expr => parse_expr(primary.into_inner()),
             Rule::ident => Expr::Var(Var {name: primary.as_str().to_owned(), global: None}),
@@ -364,13 +364,13 @@ impl FromPestPair for Struct {
     }
 }
 
-impl FromPestPair for i64 {
+impl FromPestPair for u64 {
     fn from_pest(pair: Pair<'_, Rule>) -> Self {
         let inner = pair.into_inner().next().unwrap();
         match inner.as_rule() {
             Rule::decimal_lit => inner.as_str().replace("_", "").parse().unwrap(),
             Rule::hex_lit => {
-                i64::from_str_radix(inner.as_str().replace("_", "").trim_start_matches("0x"), 16)
+                u64::from_str_radix(inner.as_str().replace("_", "").trim_start_matches("0x"), 16)
                     .unwrap()
             }
             _ => unreachable!(),
@@ -467,6 +467,7 @@ impl FromPestPair for Type {
         match pair.as_rule() {
             Rule::bool_t => Self::Bool,
             Rule::int_t => Self::Int,
+            Rule::word_t => Self::Word,
             Rule::iarray_t => Self::Array,
             Rule::ref_t => Self::Ref,
             Rule::map_t => {
@@ -480,7 +481,7 @@ impl FromPestPair for Type {
             Rule::shape_t => {
                 let shape = Shape::parse(pair.as_str()).unwrap();
                 match shape {
-                    Shape::Simple => Self::Int,
+                    Shape::Simple => Self::Word,
                     Shape::Nested(inner) => Type::Struct(inner),
                 }
             }

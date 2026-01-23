@@ -6,9 +6,10 @@ integer = @{ ASCII_DIGIT ~ ("_" | ASCII_DIGIT)* }
 hex = @{ ASCII_HEX_DIGIT ~ ("_" | ASCII_HEX_DIGIT)* }
 ident = @{ ASCII_ALPHA ~ (ASCII_ALPHANUMERIC | "_" )* }
 
-type = _{ int_t | bool_t | ref_t | iarray_t | shape_t | set_t | seq_t | map_t }
+type = _{ int_t | bool_t | word_t | ref_t | iarray_t | shape_t | set_t | seq_t | map_t }
     int_t = { "Int" }
     bool_t = { "Bool" }
+    word_t = { "Word" }
     iarray_t = { "IArray" }
     ref_t = { "Ref" }
 	set_t = { "Set[" ~ type ~ "]" }

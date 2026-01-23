@@ -17,7 +17,8 @@ impl<'a> ForceToBool<'a> for ir::Expr {
         let typ = self.resolve_expr_type(is_annot, ctx.typectx_get_mut())?;
         let value = self.to_viper(ctx)?;
         Ok(match typ {
-            Type::Int => ast.ne_cmp(value, ast.zero()),
+            Type::Int => ast.ne_cmp(value, ast.int_zero()),
+            Type::Word => ast.ne_cmp(value, ast.bv_zero()),
             Type::Bool => value,
             x => panic!("Can't cast {:?} to `Bool`", x),
         })
@@ -51,8 +52,8 @@ impl<'a> TryToViper<'a> for ir::UnOp {
         let ast = ctx.ast;
         use ir::UnOpType::*;
         Ok(match self.optype {
-            Minus => ast.minus(self.right.to_viper(ctx)?),
-            Neg => ast.not(self.right.force_to_bool(ctx)?),
+            Minus => ast.bv_sub(ast.bv_zero(), self.right.to_viper(ctx)?),
+            Neg => ast.bv_neg(self.right.force_to_bool(ctx)?),
         })
     }
 }
@@ -65,32 +66,28 @@ fn translate_op<'a>(
 ) -> viper::Expr<'a> {
     use ir::BinOpType::*;
     match optype {
-        Add => ast.add(left, right),
-        Sub => ast.sub(left, right),
-        Mul => ast.mul(left, right),
-        Div => ast.div(left, right),
-        Modulo => ast.module(left, right),
+        Add => ast.bv_add(left, right),
+        Sub => ast.bv_sub(left, right),
+        Mul => ast.bv_mul(left, right),
+        Div => ast.bv_div(left, right),
+        Modulo => ast.bv_mod(left, right),
         Imp => ast.implies(left, right),
         Iff => ast.eq_cmp(left, right),
         BoolAnd => ast.and(left, right),
         BoolOr => ast.or(left, right),
         ViperNotEqual | PancakeNotEqual => ast.ne_cmp(left, right),
         ViperEqual | PancakeEqual => ast.eq_cmp(left, right),
-        Lt | SignedLt => ast.lt_cmp(left, right), // FIXME: correctly handle signed vs unsigned
-        Lte | SignedLte => ast.le_cmp(left, right),
-        Gt | SignedGt => ast.gt_cmp(left, right),
-        Gte | SignedGte => ast.ge_cmp(left, right),
-        x @ (BitAnd | BitOr | BitXor) => {
-            let lbv = ast.int_to_backend_bv(BV64, left);
-            let rbv = ast.int_to_backend_bv(BV64, right);
-            let bvop = match x {
-                BitAnd => ast.bv_binop(BinOpBv::BitAnd, BV64, lbv, rbv),
-                BitOr => ast.bv_binop(BinOpBv::BitOr, BV64, lbv, rbv),
-                BitXor => ast.bv_binop(BinOpBv::BitXor, BV64, lbv, rbv),
-                _ => unreachable!(),
-            };
-            ast.backend_bv_to_int(BV64, bvop)
-        }
+        Lt => ast.bv_ult(left, right),
+        SignedLt => ast.bv_slt(left, right),
+        Gt => ast.bv_ugt(left, right),
+        SignedGt => ast.bv_sgt(left, right),
+        Lte => ast.bv_ule(left, right),
+        SignedLte => ast.bv_sle(left, right),
+        Gte => ast.bv_uge(left, right),
+        SignedGte => ast.bv_sge(left, right),
+        BitAnd => ast.bv_and(left, right),
+        BitOr => ast.bv_or(left, right),
+        BitXor => ast.bv_xor(left, right),
     }
 }
 
@@ -118,11 +115,8 @@ impl<'a> TryToViper<'a> for ir::BinOp {
         let binop = translate_op(ast, self.optype, left, right);
         let binop = if !is_annot {
             match self.optype {
-                Add | Sub | Mul if ctx.options.bounded_arithmetic => {
-                    ast.module(binop, ctx.word_values())
-                }
                 Lt | Lte | Gt | Gte | SignedLt | SignedLte | SignedGt | SignedGte
-                | PancakeEqual | PancakeNotEqual => ast.cond_exp(binop, ast.one(), ast.zero()),
+                | PancakeEqual | PancakeNotEqual => ast.cond_exp(binop, ast.bv_one(), ast.bv_zero()),
                 _ => binop,
             }
         } else {
@@ -143,16 +137,6 @@ impl<'a> TryToViper<'a> for ir::BinOp {
                 ctx.while_stack.push(assumption);
             }
 
-            if ctx.options.check_overflows {
-                let assertion = ast.assert(
-                    ctx.utils.bounded_f(fresh_var.1, ctx.options.word_size),
-                    ast.no_position(),
-                );
-                ctx.stack.push(assertion);
-                if let TranslationMode::WhileCond = ctx.get_mode() {
-                    ctx.while_stack.push(assertion);
-                }
-            }
             Ok(fresh_var.1)
         } else {
             Ok(binop)
@@ -175,15 +159,15 @@ impl<'a> TryToViper<'a> for ir::Shift {
     fn to_viper(self, ctx: &mut ViperEncodeCtx<'a>) -> Result<Self::Output, ToViperError> {
         let ast = ctx.ast;
         use ir::ShiftType::*;
-        let shift_type = match self.shifttype {
-            Lsl => BinOpBv::BvShl,
-            Asr => BinOpBv::BvAShr,
-            Lsr => BinOpBv::BvLShr,
-        };
-        let value = ast.int_to_backend_bv(BV64, self.value.to_viper(ctx)?);
-        let shift_amount = ast.int_to_backend_bv(BV64, ast.int_lit(self.amount as i64));
-        let shift = ast.bv_binop(shift_type, BV64, value, shift_amount);
-        Ok(ast.backend_bv_to_int(BV64, shift))
+        let value = self.value.to_viper(ctx)?;
+        let shift_amount = ast.backend_bv64_lit(self.amount);
+        Ok(
+            match self.shifttype {
+                Lsl => ast.bv_shl(value, shift_amount),
+                Asr => ast.bv_ashr(value, shift_amount),
+                Lsr => ast.bv_lshr(value, shift_amount),
+            }
+        )
     }
 }
 
@@ -214,12 +198,12 @@ impl<'a> TryToViper<'a> for ir::Field {
             Shape::Simple => unreachable!(),
             Shape::Nested(elems) => {
                 if elems[self.field_idx].len() == 1 {
-                    ast.seq_index(obj, ast.int_lit(self.field_idx as i64))
+                    ast.seq_index(obj, ast.backend_bv64_lit(self.field_idx as u64))
                 } else {
                     let (offset, size) = obj_shape.access(self.field_idx)?;
                     ast.seq_drop(
-                        ast.seq_take(obj, ast.int_lit((offset + size) as i64)),
-                        ast.int_lit(offset as i64),
+                        ast.seq_take(obj, ast.backend_bv64_lit((offset + size) as u64)),
+                        ast.backend_bv64_lit(offset as u64),
                     )
                 }
             }
@@ -398,7 +382,7 @@ impl<'a> TryToViper<'a> for ir::AccessSlice {
         let upper = self.upper.to_viper(ctx)?;
         let typ = self.typ;
         let perm = self.perm.to_viper(ctx);
-        Ok(ctx.heap.heap_acc_expr(field, lower, upper, typ, perm, ctx.options.word_size as i64))
+        Ok(ctx.heap.heap_acc_expr(field, lower, upper, typ, perm, ctx.options.word_size))
     }
 }
 
@@ -439,7 +423,7 @@ impl<'a> TryToViper<'a> for ir::Expr {
             AccessSlice(slice) => slice.to_viper(ctx),
             ViperFieldAccess(acc) => acc.to_viper(ctx),
             x => Ok(match x {
-                Const(c) => ast.int_lit(c),
+                Const(c) => ast.backend_bv64_lit(c),
                 BoolLit(b) if b => ast.true_lit(),
                 BoolLit(b) if !b => ast.false_lit(),
                 Var(v) if v.name == "result" => ast.result_with_pos(
@@ -449,8 +433,8 @@ impl<'a> TryToViper<'a> for ir::Expr {
                 Var(v) if v.global.unwrap_or(false) => ctx.gv_access(&v.name),
                 Var(v) => ast.local_var(&v.name, ctx.get_type(&v.name)?.to_viper_type(ctx)),
                 Label(_) => todo!(), // XXX: not sure if we need this
-                BaseAddr => ast.zero(),
-                BytesInWord => ast.int_lit(ctx.options.word_size as i64 / 8),
+                BaseAddr => ast.int_zero(),
+                BytesInWord => ast.backend_bv64_lit(ctx.options.word_size / 8),
                 Old(old) => ast.old(old.expr.to_viper(ctx)?),
                 SeqLength(s) => ast.seq_length(s.expr.to_viper(ctx)?),
                 _ => {

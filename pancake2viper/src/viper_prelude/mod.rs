@@ -26,8 +26,8 @@ pub fn create_viper_prelude(
     let domains = vec![heap.domain, create_bv_domain(ast)];
 
     let mut fields = Vec::new();
-    fields.push(ast.field("local_mem", ast.int_type()));
-    fields.push(ast.field("shared_mem", ast.int_type()));
+    fields.push(ast.field("local_mem", ast.backend_bv64_type()));
+    fields.push(ast.field("shared_mem", ast.backend_bv64_type()));
 
     let methods = create_shared_mem_methods(ast, &utils);
     (
