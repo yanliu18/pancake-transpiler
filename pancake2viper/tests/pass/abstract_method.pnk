@@ -1,7 +1,7 @@
-/@ method ffiprint_int(a: Int, b: Int, c: Int, d: Int) @/
+/@ method ffiprint_int(a: Word, b: Word, c: Word, d: Word) @/
 
 /@ 
-method ffiprint_uint(a: Int, b: Int, c: Int, d: Int) 
+method ffiprint_uint(a: Word, b: Word, c: Word, d: Word) 
     requires b >= 0
     requires d >= 0    
 @/
