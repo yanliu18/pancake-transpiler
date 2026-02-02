@@ -31,7 +31,11 @@ impl<'a> TryToViper<'a> for ir::Load {
             let length = self.shape.len() as i64;
             let elems = (0..length)
                 .map(|offset| {
-                    heap.access(heap_var, ast.add(word_addr, ast.int_lit(offset)), MemType::Local)
+                    heap.access(
+                        heap_var,
+                        ast.add(word_addr, ast.int_lit(offset)),
+                        MemType::Local,
+                    )
                 })
                 .collect::<Vec<_>>();
             ast.explicit_seq(&elems)
@@ -105,10 +109,12 @@ impl<'a> TryToViper<'a> for ir::Store {
             let elems = (0..length)
                 .map(|offset| {
                     let src = ast.seq_index(rhs, ast.int_lit(offset));
-                    let dst = ctx
-                        .heap
-                        .access(heap_var, ast.add(word_addr, ast.int_lit(offset)), MemType::Local);
-                    ast.local_var_assign(dst, src)
+                    let dst = ctx.heap.access(
+                        heap_var,
+                        ast.add(word_addr, ast.int_lit(offset)),
+                        MemType::Local,
+                    );
+                    ast.field_assign(dst, src)
                 })
                 .collect::<Vec<_>>();
             ast.seqn(&elems, &[])
