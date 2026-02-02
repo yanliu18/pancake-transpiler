@@ -18,7 +18,7 @@ impl<'a> TryToViper<'a> for ir::Load {
         if self.assert && ctx.options.assert_aligned_accesses {
             // assert addr % @biw == 0
             let assertion = ast.assert(
-                ast.eq_cmp(ast.module(addr_exp, bytes_in_word), ast.int_zero()),
+                ast.eq_cmp(ast.bv_mod(addr_exp, bytes_in_word), ast.bv_zero()),
                 ast.no_position(),
             );
             ctx.stack.push(assertion);

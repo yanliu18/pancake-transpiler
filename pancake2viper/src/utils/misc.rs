@@ -96,10 +96,10 @@ macro_rules! bv_binop2 {
                 ("bv64_".to_owned() + stringify!($y)).as_str(),
                 &[a, b],
                 self.backend_bv64_type(),
-                self.no_position()
+                self.no_position(),
             )
         }
-    }
+    };
 }
 
 impl<'a> ViperUtils<'a> for AstFactory<'a> {
@@ -144,7 +144,7 @@ impl<'a> ViperUtils<'a> for AstFactory<'a> {
             "bv64_not",
             &[a],
             self.backend_bv64_type(),
-            self.no_position()
+            self.no_position(),
         )
     }
 
@@ -153,7 +153,7 @@ impl<'a> ViperUtils<'a> for AstFactory<'a> {
             "bv64_neg",
             &[a],
             self.backend_bv64_type(),
-            self.no_position()
+            self.no_position(),
         )
     }
 
@@ -164,7 +164,7 @@ impl<'a> ViperUtils<'a> for AstFactory<'a> {
     bv_binop!(bv_sub, BvSub);
     bv_binop!(bv_mul, BvMul);
     bv_binop!(bv_div, BvUDiv);
-    bv_binop2!(bv_mod, udiv);
+    bv_binop2!(bv_mod, urem);
     bv_binop2!(bv_ule, ule);
     bv_binop2!(bv_uge, uge);
     bv_binop2!(bv_ult, ult);
