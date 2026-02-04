@@ -152,6 +152,14 @@ impl From<ClapGenerate> for Generate {
     }
 }
 
+#[derive(ValueEnum, Clone, Debug)]
+pub enum EncodingModeArgs {
+    #[value(name = "int")]
+    Int,
+    #[value(name = "bitvec")]
+    Bitvec,
+}
+
 #[derive(Debug, Parser, Clone)]
 #[command(version, about, rename_all = "kebab-case")]
 pub struct ClapCliOptions {
@@ -258,7 +266,11 @@ pub struct ClapCliOptions {
     )]
     pub only: Option<Vec<String>>,
 
-    #[arg(global = true, long, help = "Transpile and verify each function separately")]
+    #[arg(
+        global = true,
+        long,
+        help = "Transpile and verify each function separately"
+    )]
     pub incremental: bool,
 
     #[arg(
@@ -268,11 +280,7 @@ pub struct ClapCliOptions {
     )]
     pub trust_model: bool,
 
-    #[arg(
-        global = true,
-        long,
-        help = "Model function calls abstractly"
-    )]
+    #[arg(global = true, long, help = "Model function calls abstractly")]
     pub function_call_abstract: bool,
 
     #[arg(global = true, long, short = 'I', help = "Include Viper files")]
@@ -280,6 +288,15 @@ pub struct ClapCliOptions {
 
     #[arg(global = true, long, help = "Generate a counter example")]
     pub counter_example: bool,
+
+    #[arg(
+        global = true,
+        default_value = "int",
+        long,
+        help = "Encoding of words",
+        value_enum
+    )]
+    pub encoding_mode: EncodingModeArgs,
 }
 
 #[derive(Debug, Clone)]
@@ -306,12 +323,19 @@ pub struct CliOptions {
     pub function_call_abstract: bool,
     pub include: Vec<String>,
     pub counter_example: bool,
+    pub encoding_mode: EncodingModeArgs,
 }
 
 impl From<ClapCliOptions> for CliOptions {
     fn from(value: ClapCliOptions) -> Self {
-        assert!(value.heap_base % 1024 == 0, "Heap Base has to be page aligned by 1024.");
-        assert!(value.heap_top % 1024 == 0, "Heap Top has to be page aligned by 1024.");
+        assert!(
+            value.heap_base % 1024 == 0,
+            "Heap Base has to be page aligned by 1024."
+        );
+        assert!(
+            value.heap_top % 1024 == 0,
+            "Heap Top has to be page aligned by 1024."
+        );
         Self {
             cmd: value.cmd.into(),
             word_size: value.word_size,
@@ -334,6 +358,7 @@ impl From<ClapCliOptions> for CliOptions {
             function_call_abstract: value.function_call_abstract,
             include: value.include.unwrap_or_default(),
             counter_example: value.counter_example,
+            encoding_mode: value.encoding_mode,
         }
     }
 }
@@ -362,14 +387,21 @@ impl Default for CliOptions {
             function_call_abstract: false,
             include: vec![],
             counter_example: false,
+            encoding_mode: EncodingModeArgs::Int,
         }
     }
 }
 
 impl From<CliOptions> for EncodeOptions {
     fn from(value: CliOptions) -> Self {
-        assert!(value.heap_base % 1024 == 0, "Heap Base has to be page aligned.");
-        assert!(value.heap_top % 1024 == 0, "Heap Top has to be page aligned.");
+        assert!(
+            value.heap_base % 1024 == 0,
+            "Heap Base has to be page aligned."
+        );
+        assert!(
+            value.heap_top % 1024 == 0,
+            "Heap Top has to be page aligned."
+        );
         Self {
             assert_aligned_accesses: !value.disable_assert_alignment,
             word_size: value.word_size.into(),

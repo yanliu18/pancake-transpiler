@@ -1,12 +1,11 @@
-use viper::BinOpBv;
-use viper::BvSize::BV64;
-
 use crate::utils::{
-    ExprTypeResolution, ForceToBool, Mangler, Shape, ToType, ToViper, ToViperError, ToViperType,
-    TranslationMode, TryToShape, TryToViper, ViperEncodeCtx, ViperUtils,
+    EncodingMode, ExprTypeResolution, ForceToBool, Mangler, Shape, ToType, ToViper, ToViperError,
+    ToViperType, TranslationMode, TryToShape, TryToViper, ViperEncodeCtx, ViperUtils,
 };
 
-use crate::ir::{self, BinOpType, Type};
+use crate::ir::{self, BinOpType, ShiftType, Type};
+
+use crate::ir_to_viper::utils::EncodingModeHelper;
 
 impl<'a> ForceToBool<'a> for ir::Expr {
     type Output = viper::Expr<'a>;
@@ -18,7 +17,7 @@ impl<'a> ForceToBool<'a> for ir::Expr {
         let value = self.to_viper(ctx)?;
         Ok(match typ {
             Type::Int => ast.ne_cmp(value, ast.int_zero()),
-            Type::Word => ast.ne_cmp(value, ast.bv_zero()),
+            Type::Word => ast.ne_cmp(value, ctx.encoding_mode.zero(ast)),
             Type::Bool => value,
             x => panic!("Can't cast {:?} to `Bool`", x),
         })
@@ -51,43 +50,16 @@ impl<'a> TryToViper<'a> for ir::UnOp {
     fn to_viper(self, ctx: &mut ViperEncodeCtx<'a>) -> Result<Self::Output, ToViperError> {
         let ast = ctx.ast;
         use ir::UnOpType::*;
-        Ok(match self.optype {
-            Minus => ast.bv_sub(ast.bv_zero(), self.right.to_viper(ctx)?),
-            Neg => ast.bv_neg(self.right.force_to_bool(ctx)?),
+        Ok(match ctx.encoding_mode {
+            EncodingMode::Int => match self.optype {
+                Minus => ast.minus(self.right.to_viper(ctx)?),
+                Neg => ast.not(self.right.force_to_bool(ctx)?),
+            },
+            EncodingMode::Bitvec => match self.optype {
+                Minus => ast.bv_sub(ast.bv_zero(), self.right.to_viper(ctx)?),
+                Neg => ast.bv_neg(self.right.force_to_bool(ctx)?),
+            },
         })
-    }
-}
-
-fn translate_op<'a>(
-    ast: viper::AstFactory<'a>,
-    optype: BinOpType,
-    left: viper::Expr<'a>,
-    right: viper::Expr<'a>,
-) -> viper::Expr<'a> {
-    use ir::BinOpType::*;
-    match optype {
-        Add => ast.bv_add(left, right),
-        Sub => ast.bv_sub(left, right),
-        Mul => ast.bv_mul(left, right),
-        Div => ast.bv_div(left, right),
-        Modulo => ast.bv_mod(left, right),
-        Imp => ast.implies(left, right),
-        Iff => ast.eq_cmp(left, right),
-        BoolAnd => ast.and(left, right),
-        BoolOr => ast.or(left, right),
-        ViperNotEqual | PancakeNotEqual => ast.ne_cmp(left, right),
-        ViperEqual | PancakeEqual => ast.eq_cmp(left, right),
-        Lt => ast.bv_ult(left, right),
-        SignedLt => ast.bv_slt(left, right),
-        Gt => ast.bv_ugt(left, right),
-        SignedGt => ast.bv_sgt(left, right),
-        Lte => ast.bv_ule(left, right),
-        SignedLte => ast.bv_sle(left, right),
-        Gte => ast.bv_uge(left, right),
-        SignedGte => ast.bv_sge(left, right),
-        BitAnd => ast.bv_and(left, right),
-        BitOr => ast.bv_or(left, right),
-        BitXor => ast.bv_xor(left, right),
     }
 }
 
@@ -112,11 +84,22 @@ impl<'a> TryToViper<'a> for ir::BinOp {
             ),
             _ => (self.left.to_viper(ctx)?, self.right.to_viper(ctx)?),
         };
-        let binop = translate_op(ast, self.optype, left, right);
+        let binop = ctx
+            .encoding_mode
+            .translate_op(ast, self.optype, left, right);
         let binop = if !is_annot {
             match self.optype {
+                Add | Sub | Mul
+                    if ctx.options.bounded_arithmetic && ctx.encoding_mode == EncodingMode::Int =>
+                {
+                    ast.module(binop, ctx.word_values())
+                }
                 Lt | Lte | Gt | Gte | SignedLt | SignedLte | SignedGt | SignedGte
-                | PancakeEqual | PancakeNotEqual => ast.cond_exp(binop, ast.bv_one(), ast.bv_zero()),
+                | PancakeEqual | PancakeNotEqual => ast.cond_exp(
+                    binop,
+                    ctx.encoding_mode.one(ast),
+                    ctx.encoding_mode.zero(ast),
+                ),
                 _ => binop,
             }
         } else {
@@ -137,6 +120,16 @@ impl<'a> TryToViper<'a> for ir::BinOp {
                 ctx.while_stack.push(assumption);
             }
 
+            if ctx.options.check_overflows && ctx.encoding_mode == EncodingMode::Int {
+                let assertion = ast.assert(
+                    ctx.utils.bounded_f(fresh_var.1, ctx.options.word_size),
+                    ast.no_position(),
+                );
+                ctx.stack.push(assertion);
+                if let TranslationMode::WhileCond = ctx.get_mode() {
+                    ctx.while_stack.push(assertion);
+                }
+            }
             Ok(fresh_var.1)
         } else {
             Ok(binop)
@@ -157,17 +150,11 @@ impl<'a> TryToViper<'a> for ir::Contains {
 impl<'a> TryToViper<'a> for ir::Shift {
     type Output = viper::Expr<'a>;
     fn to_viper(self, ctx: &mut ViperEncodeCtx<'a>) -> Result<Self::Output, ToViperError> {
-        let ast = ctx.ast;
-        use ir::ShiftType::*;
         let value = self.value.to_viper(ctx)?;
-        let shift_amount = ast.backend_bv64_lit(self.amount);
-        Ok(
-            match self.shifttype {
-                Lsl => ast.bv_shl(value, shift_amount),
-                Asr => ast.bv_ashr(value, shift_amount),
-                Lsr => ast.bv_lshr(value, shift_amount),
-            }
-        )
+        let shift_amount = ctx.encoding_mode.lit(ctx.ast, self.amount);
+        Ok(ctx
+            .encoding_mode
+            .translate_shift(ctx.ast, self.shifttype, value, shift_amount))
     }
 }
 
@@ -198,12 +185,12 @@ impl<'a> TryToViper<'a> for ir::Field {
             Shape::Simple => unreachable!(),
             Shape::Nested(elems) => {
                 if elems[self.field_idx].len() == 1 {
-                    ast.seq_index(obj, ast.backend_bv64_lit(self.field_idx as u64))
+                    ast.seq_index(obj, ctx.encoding_mode.lit(ast, self.field_idx as u64))
                 } else {
                     let (offset, size) = obj_shape.access(self.field_idx)?;
                     ast.seq_drop(
-                        ast.seq_take(obj, ast.backend_bv64_lit((offset + size) as u64)),
-                        ast.backend_bv64_lit(offset as u64),
+                        ast.seq_take(obj, ctx.encoding_mode.lit(ast, (offset + size) as u64)),
+                        ctx.encoding_mode.lit(ast, offset as u64),
                     )
                 }
             }
@@ -315,13 +302,14 @@ impl<'a> TryToViper<'a> for ir::ArrayAccess {
     type Output = viper::Expr<'a>;
     fn to_viper(self, ctx: &mut ViperEncodeCtx<'a>) -> Result<Self::Output, ToViperError> {
         let idx = self.idx.to_viper(ctx)?;
-        let typ = self.obj.resolve_expr_type(ctx.get_mode().is_annot(), ctx.typectx_get_mut())?;
+        let typ = self
+            .obj
+            .resolve_expr_type(ctx.get_mode().is_annot(), ctx.typectx_get_mut())?;
         let obj = self.obj.to_viper(ctx)?;
         let heap = ctx.heap;
         match typ {
             Type::Seq(_) => Ok(ctx.ast.seq_index(obj, idx)),
-            _ => Ok(heap.access(obj, idx, crate::viper_prelude::heap::MemType::Local))
-            // _ => unreachable!("Expected memory cell type: pan and shared, got {:?}", self.mem_type.as_str())
+            _ => Ok(heap.access(obj, idx, crate::viper_prelude::heap::MemType::Local)), // _ => unreachable!("Expected memory cell type: pan and shared, got {:?}", self.mem_type.as_str())
         }
     }
 }
@@ -382,7 +370,9 @@ impl<'a> TryToViper<'a> for ir::AccessSlice {
         let upper = self.upper.to_viper(ctx)?;
         let typ = self.typ;
         let perm = self.perm.to_viper(ctx);
-        Ok(ctx.heap.heap_acc_expr(field, lower, upper, typ, perm, ctx.options.word_size))
+        Ok(ctx
+            .heap
+            .heap_acc_expr(field, lower, upper, typ, perm, ctx.options.word_size))
     }
 }
 
@@ -423,7 +413,7 @@ impl<'a> TryToViper<'a> for ir::Expr {
             AccessSlice(slice) => slice.to_viper(ctx),
             ViperFieldAccess(acc) => acc.to_viper(ctx),
             x => Ok(match x {
-                Const(c) => ast.backend_bv64_lit(c),
+                Const(c) => ctx.encoding_mode.lit(ast, c),
                 BoolLit(b) if b => ast.true_lit(),
                 BoolLit(b) if !b => ast.false_lit(),
                 Var(v) if v.name == "result" => ast.result_with_pos(
@@ -433,14 +423,14 @@ impl<'a> TryToViper<'a> for ir::Expr {
                 Var(v) if v.global.unwrap_or(false) => ctx.gv_access(&v.name),
                 Var(v) => ast.local_var(&v.name, ctx.get_type(&v.name)?.to_viper_type(ctx)),
                 Label(_) => todo!(), // XXX: not sure if we need this
-                BaseAddr => ast.int_zero(),
-                BytesInWord => ast.backend_bv64_lit(ctx.options.word_size / 8),
+                BaseAddr => ctx.encoding_mode.zero(ctx.ast),
+                BytesInWord => ctx.encoding_mode.lit(ctx.ast, ctx.options.word_size / 8),
                 Old(old) => ast.old(old.expr.to_viper(ctx)?),
                 SeqLength(s) => ast.seq_length(s.expr.to_viper(ctx)?),
                 _ => {
-                    println!("{:?}", x); 
+                    println!("{:?}", x);
                     unreachable!()
-                },
+                }
             }),
         }
     }

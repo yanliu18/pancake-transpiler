@@ -6,7 +6,9 @@ use std::{
 use viper::{AstFactory, Declaration, LocalVarDecl};
 
 use crate::{
-    ir::{self, AnnotationType, FnDec, Model, shared::SharedContext, types::Type}, utils::ViperUtils, viper_prelude::{HeapHelper, utils::Utils}
+    ir::{self, shared::SharedContext, types::Type, AnnotationType, FnDec, Model},
+    utils::ViperUtils,
+    viper_prelude::{utils::Utils, HeapHelper},
 };
 
 use super::{mangler::Mangler, TranslationError, RESERVED};
@@ -91,14 +93,11 @@ impl TypeContext {
     }
 
     pub fn get_type_no_mangle(&self, var: &str) -> Result<Type, TranslationError> {
-        self.type_map
-            .get(var)
-            .cloned()
-            .ok_or_else(|| {
-                // println!("Error: variable '{}' not found", var);
-                // println!("Available types in type_map: {:?}", self.type_map);
-                TranslationError::UnknownShape(var.to_owned())
-            })
+        self.type_map.get(var).cloned().ok_or_else(|| {
+            // println!("Error: variable '{}' not found", var);
+            // println!("Available types in type_map: {:?}", self.type_map);
+            TranslationError::UnknownShape(var.to_owned())
+        })
     }
 
     pub fn get_function_type(&self, fname: &str) -> Result<Type, TranslationError> {
@@ -123,21 +122,54 @@ impl TypeContext {
     }
 
     pub fn get_field_type(&self, field: &str) -> Result<Type, TranslationError> {
-        self.fields
-            .get(field)
-            .map(|t| t.to_owned())
-            .ok_or_else( || {
-                // println!("Error: Unknown Field '{}'", field);
-                // println!("Available types in field_map: {:?}", self.fields);
-                // println!("Available types in type_map: {:?}", self.type_map);
-                TranslationError::UnknownField(field.to_owned())
-            })
+        self.fields.get(field).map(|t| t.to_owned()).ok_or_else(|| {
+            // println!("Error: Unknown Field '{}'", field);
+            // println!("Available types in field_map: {:?}", self.fields);
+            // println!("Available types in type_map: {:?}", self.type_map);
+            TranslationError::UnknownField(field.to_owned())
+        })
     }
 }
 
 impl Default for TypeContext {
     fn default() -> Self {
         Self::new(HashMap::new())
+    }
+}
+
+#[derive(PartialEq, Eq, Copy, Clone)]
+pub enum EncodingMode {
+    Int,
+    Bitvec,
+}
+
+impl EncodingMode {
+    pub fn to_viper_type<'a>(&self, ast: &AstFactory<'a>) -> viper::Type<'a> {
+        match self {
+            EncodingMode::Int => ast.int_type(),
+            EncodingMode::Bitvec => ast.backend_bv64_type(),
+        }
+    }
+
+    pub fn lit<'a>(&self, ast: AstFactory<'a>, val: u64) -> viper::Expr<'a> {
+        match self {
+            EncodingMode::Int => ast.int_lit(val as i64),
+            EncodingMode::Bitvec => ast.backend_bv64_lit(val),
+        }
+    }
+
+    pub fn zero<'a>(&self, ast: AstFactory<'a>) -> viper::Expr<'a> {
+        match self {
+            EncodingMode::Int => ast.int_zero(),
+            EncodingMode::Bitvec => ast.bv_zero(),
+        }
+    }
+
+    pub fn one<'a>(&self, ast: AstFactory<'a>) -> viper::Expr<'a> {
+        match self {
+            EncodingMode::Int => ast.int_one(),
+            EncodingMode::Bitvec => ast.bv_one(),
+        }
     }
 }
 
@@ -164,6 +196,7 @@ pub struct ViperEncodeCtx<'a> {
     pub extern_methods: HashSet<String>,
     pub shared_override: Option<String>,
     pub extern_consts: HashMap<String, Type>,
+    pub encoding_mode: EncodingMode,
 }
 
 #[derive(Clone, Copy)]
@@ -211,11 +244,15 @@ impl<'a> ViperEncodeCtx<'a> {
         pnk_methods: HashSet<String>,
         extern_methods: HashSet<String>,
         extern_consts: HashMap<String, Type>,
+        encoding_mode: EncodingMode,
     ) -> Self {
-        let heap = HeapHelper::new(ast);
+        let heap = HeapHelper::new(ast, encoding_mode);
         let fields_set: HashSet<String> = model.fields.clone().into_iter().collect();
         let consts_set: HashSet<String> = extern_consts.keys().cloned().collect();
-        let mangler_set: HashSet<String> = fields_set.union(&consts_set).cloned().collect::<HashSet<String>>();
+        let mangler_set: HashSet<String> = fields_set
+            .union(&consts_set)
+            .cloned()
+            .collect::<HashSet<String>>();
         Self {
             mode: TranslationMode::Normal,
             ast,
@@ -238,6 +275,7 @@ impl<'a> ViperEncodeCtx<'a> {
             extern_methods,
             shared_override: None,
             extern_consts,
+            encoding_mode,
         }
     }
 
@@ -264,6 +302,7 @@ impl<'a> ViperEncodeCtx<'a> {
             extern_methods: self.extern_methods.clone(),
             shared_override: self.shared_override.clone(),
             extern_consts: self.extern_consts.clone(),
+            encoding_mode: self.encoding_mode,
         }
     }
 
@@ -311,17 +350,21 @@ impl<'a> ViperEncodeCtx<'a> {
     }
 
     pub fn heap_vars(&self) -> Vec<(viper::LocalVarDecl, viper::Expr)> {
-        self.utils.heap_vars() 
+        self.utils.heap_vars()
     }
 
     pub fn gv_ref(&self) -> (viper::LocalVarDecl, viper::Expr) {
         self.utils.gv_ref()
     }
 
+    pub fn default_type(&self) -> viper::Type<'a> {
+        self.encoding_mode.to_viper_type(&self.ast)
+    }
+
     pub fn gv_access(&self, name: &String) -> viper::Expr<'a> {
         let ast = self.ast;
-        let var= self.utils.gv_ref();
-        ast.field_access(var.1, ast.field(name, ast.backend_bv64_type()))
+        let var = self.utils.gv_ref();
+        ast.field_access(var.1, ast.field(name, self.default_type()))
     }
 
     pub fn set_mode(&mut self, mode: TranslationMode) {
@@ -362,10 +405,16 @@ impl<'a> ViperEncodeCtx<'a> {
 
     pub fn word_values(&self) -> viper::Expr<'a> {
         let ast = self.ast;
-        ast.bv_mul(
-            ast.backend_bv64_lit(4),
-            ast.backend_bv64_lit(2u64.pow(self.options.word_size as u32 - 2)),
-        )
+        match self.encoding_mode {
+            EncodingMode::Int => ast.mul(
+                ast.int_lit(4),
+                ast.int_lit(2i64.pow(self.options.word_size as u32 - 2)),
+            ),
+            EncodingMode::Bitvec => ast.bv_mul(
+                ast.backend_bv64_lit(4),
+                ast.backend_bv64_lit(2u64.pow(self.options.word_size as u32 - 2)),
+            ),
+        }
     }
 
     pub fn get_default_args(&self) -> (Vec<viper::LocalVarDecl>, Vec<viper::Expr>) {

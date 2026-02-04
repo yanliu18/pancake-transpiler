@@ -4,9 +4,10 @@ use std::rc::Rc;
 use shared::SharedContext;
 use viper::AstFactory;
 
+use crate::ir_to_viper::utils::EncodingModeHelper;
 use crate::utils::{
-    EncodeOptions, ForceToBool, MethodContext, ProgramToViper, ToViper, ToViperError, ToViperType,
-    TranslationMode, TryToViper, TypeContext, ViperEncodeCtx,
+    EncodeOptions, EncodingMode, ForceToBool, MethodContext, ProgramToViper, ToViper, ToViperError,
+    ToViperType, TranslationMode, TryToViper, TypeContext, ViperEncodeCtx,
 };
 use crate::viper_prelude::create_viper_prelude;
 
@@ -26,20 +27,25 @@ impl<'a> TryToViper<'a> for FnDec {
         let ast = ctx.ast;
 
         // add access permissions to arguments if structs
-        let mut pres = ctx
+        let mut pres = self
+            .args
+            .iter()
+            .filter_map(|a| a.precondition(false, ctx))
+            .collect::<Vec<_>>();
+        let pred_pres = ctx
             .model
             .predicates
             .clone()
             .into_iter()
             .map(|p| p.to_viper(ctx))
             .collect::<Result<Vec<_>, _>>()?;
+        pres.extend(pred_pres);
         let mut posts = pres.clone();
 
         // Add postcondition (bounds of integers)
-        match self.postcondition(ctx) {
-            Some(p) => posts.push(p),
-            _ => (),
-        };
+        if let Some(post) = self.postcondition(ctx) {
+            posts.push(post);
+        }
 
         let args_local_decls = self.args.to_viper(ctx);
 
@@ -61,7 +67,10 @@ impl<'a> TryToViper<'a> for FnDec {
         // add a default precondition about heap size: `requires alen(heap) == HEAP_SIZE`
         pres.insert(
             0,
-            ast.eq_cmp(heap_len, ast.backend_bv64_lit(ctx.options.heap_top)),
+            ast.eq_cmp(
+                heap_len,
+                ctx.encoding_mode.lit(ast, ctx.options.heap_top as u64),
+            ),
         );
 
         posts.extend(self.posts.force_to_bool(ctx)?);
@@ -93,11 +102,29 @@ impl<'a> TryToViper<'a> for FnDec {
     }
 }
 
+fn extend_body<'a>(
+    args: &[Arg],
+    body: Option<viper::Expr<'a>>,
+    ctx: &mut ViperEncodeCtx<'a>,
+) -> Option<viper::Expr<'a>> {
+    let ast = ctx.ast;
+    let pres = args
+        .iter()
+        .filter_map(|a| a.precondition(true, ctx))
+        .reduce(|acc, e| ast.and(acc, e));
+    match (body, pres) {
+        (Some(b), Some(p)) => Some(ast.and(p, b)),
+        (Some(b), None) => Some(b),
+        _ => None,
+    }
+}
+
 impl<'a> TryToViper<'a> for Predicate {
     type Output = viper::Predicate<'a>;
     fn to_viper(self, ctx: &mut ViperEncodeCtx<'a>) -> Result<Self::Output, ToViperError> {
         let ast = ctx.ast;
         let body = self.body.map(|e| e.force_to_bool(ctx)).transpose()?;
+        let body = extend_body(&self.args, body, ctx);
         let args = self.args.to_viper(ctx);
         let mut base_args = ctx.get_default_args().0;
         base_args.extend(args);
@@ -114,7 +141,12 @@ impl<'a> TryToViper<'a> for Function {
         ctx.typectx_get_mut()
             .set_type("result".into(), self.typ.clone());
 
-        let pres = self.pres.force_to_bool(ctx)?;
+        let mut pres = self
+            .args
+            .iter()
+            .filter_map(|a| a.precondition(true, ctx))
+            .collect::<Vec<_>>();
+        pres.extend(self.pres.force_to_bool(ctx)?);
         let posts = self.posts.force_to_bool(ctx)?;
         let body = self
             .body
@@ -144,7 +176,12 @@ impl<'a> TryToViper<'a> for AbstractMethod {
     type Output = viper::Method<'a>;
     fn to_viper(self, ctx: &mut ViperEncodeCtx<'a>) -> Result<Self::Output, ToViperError> {
         let ast = ctx.ast;
-        let pres = self.pres.force_to_bool(ctx)?;
+        let mut pres = self
+            .args
+            .iter()
+            .filter_map(|a| a.precondition(true, ctx))
+            .collect::<Vec<_>>();
+        pres.extend(self.pres.force_to_bool(ctx)?);
         let posts = self.posts.force_to_bool(ctx)?;
 
         let rettyps = self.rettyps.to_viper(ctx);
@@ -162,6 +199,7 @@ impl<'a> ProgramToViper<'a> for Program {
         types: TypeContext,
         ast: AstFactory<'a>,
         options: EncodeOptions,
+        encoding_mode: EncodingMode,
     ) -> Result<viper::Program<'a>, ToViperError> {
         // Create context for shared memory accesses
         let shared = Rc::new(SharedContext::new(&options, &self.shared));
@@ -194,6 +232,7 @@ impl<'a> ProgramToViper<'a> for Program {
             pnk_methods.clone(),
             extern_methods.clone(),
             extern_consts.clone(),
+            encoding_mode,
         );
         ctx.set_mode(TranslationMode::PrePost);
 
@@ -212,6 +251,7 @@ impl<'a> ProgramToViper<'a> for Program {
                     pnk_methods.clone(),
                     extern_methods.clone(),
                     extern_consts.clone(),
+                    encoding_mode,
                 );
                 ctx.set_mode(TranslationMode::PrePost);
                 p.to_viper(&mut ctx)
@@ -243,6 +283,7 @@ impl<'a> ProgramToViper<'a> for Program {
                     pnk_methods.clone(),
                     extern_methods.clone(),
                     extern_consts.clone(),
+                    encoding_mode,
                 );
                 ctx.set_mode(TranslationMode::PrePost);
                 f.to_viper(&mut ctx)
@@ -264,6 +305,7 @@ impl<'a> ProgramToViper<'a> for Program {
                     pnk_methods.clone(),
                     extern_methods.clone(),
                     extern_consts.clone(),
+                    encoding_mode,
                 );
                 ctx.set_mode(TranslationMode::PrePost);
                 m.to_viper(&mut ctx)
@@ -285,13 +327,15 @@ impl<'a> ProgramToViper<'a> for Program {
                     pnk_methods.clone(),
                     extern_methods.clone(),
                     extern_consts.clone(),
+                    encoding_mode,
                 );
                 f.to_viper(&mut ctx)
             })
             .collect::<Result<Vec<(_, _)>, _>>()?
             .into_iter()
             .unzip();
-        let (domains, mut fields, mut methods, fs) = create_viper_prelude(ast, self.model, options);
+        let (domains, mut fields, mut methods, fs) =
+            create_viper_prelude(ast, self.model, options, encoding_mode);
         methods.extend(abstract_methods.iter());
         methods.extend(program_methods.iter());
         if options.function_call_abstract {

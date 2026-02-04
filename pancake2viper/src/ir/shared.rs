@@ -1,4 +1,6 @@
-use crate::utils::{EncodeOptions, ToViperError, TryToViper, ViperEncodeCtx, ViperUtils};
+use crate::utils::{
+    EncodeOptions, EncodingMode, ToViperError, TryToViper, ViperEncodeCtx, ViperUtils,
+};
 
 use super::{Expr, MemOpBytes, Model, Shared, SharedPerm};
 use std::{collections::HashSet, fmt::Display};
@@ -36,16 +38,32 @@ impl SharedInternal {
                 ast.bv_or(acc, ast.eq_cmp(addr, ast.backend_bv64_lit(*e)))
             })
         } else {
-            let range = ast.and(
-                ast.bv_ule(ast.backend_bv64_lit(self.lower), addr),
-                ast.bv_ult(addr, ast.backend_bv64_lit(self.upper)),
-            );
-            let offset = self.lower % self.stride;
-            let stride = ast.eq_cmp(
-                ast.bv_mod(addr, ast.backend_bv64_lit(self.stride)),
-                ast.backend_bv64_lit(offset),
-            );
-            ast.and(range, stride)
+            match ctx.encoding_mode {
+                EncodingMode::Int => {
+                    let range = ast.and(
+                        ast.le_cmp(ast.int_lit(self.lower as i64), addr),
+                        ast.lt_cmp(addr, ast.int_lit(self.upper as i64)),
+                    );
+                    let offset = self.lower % self.stride;
+                    let stride = ast.eq_cmp(
+                        ast.module(addr, ast.int_lit(self.stride as i64)),
+                        ast.int_lit(offset as i64),
+                    );
+                    ast.and(range, stride)
+                }
+                EncodingMode::Bitvec => {
+                    let range = ast.and(
+                        ast.bv_ule(ast.backend_bv64_lit(self.lower), addr),
+                        ast.bv_ult(addr, ast.backend_bv64_lit(self.upper)),
+                    );
+                    let offset = self.lower % self.stride;
+                    let stride = ast.eq_cmp(
+                        ast.bv_mod(addr, ast.backend_bv64_lit(self.stride)),
+                        ast.backend_bv64_lit(offset),
+                    );
+                    ast.and(range, stride)
+                }
+            }
         }
     }
 

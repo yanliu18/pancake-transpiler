@@ -2,18 +2,30 @@ use viper::{AstFactory, Expr, Function, LocalVarDecl};
 
 use crate::{
     ir::Model,
-    utils::{EncodeOptions, ViperUtils},
+    utils::{EncodeOptions, EncodingMode, ViperUtils},
 };
 
-pub fn bound_bits_function(ast: AstFactory, bits: u64) -> Function {
-    let x = ast.new_var("x", ast.backend_bv64_type());
-    let body = ast.and(
-        ast.bv_ule(ast.bv_zero(), x.1),
-        ast.bv_ult(
-            x.1,
-            ast.bv_mul(ast.backend_bv64_lit(4), ast.backend_bv64_lit(2u64.pow(bits as u32 - 2))),
+pub fn bound_bits_function(ast: AstFactory, bits: u64, encoding: EncodingMode) -> Function {
+    let x = ast.new_var("x", encoding.to_viper_type(&ast));
+    let body = match encoding {
+        EncodingMode::Bitvec => ast.and(
+            ast.bv_ule(ast.bv_zero(), x.1),
+            ast.bv_ult(
+                x.1,
+                ast.bv_mul(
+                    ast.backend_bv64_lit(4),
+                    ast.backend_bv64_lit(2u64.pow(bits as u32 - 2)),
+                ),
+            ),
         ),
-    );
+        EncodingMode::Int => ast.and(
+            ast.le_cmp(ast.int_zero(), x.1),
+            ast.lt_cmp(
+                x.1,
+                ast.mul(ast.int_lit(4), ast.int_lit(2i64.pow(bits as u32 - 2))),
+            ),
+        ),
+    };
     ast.function(
         &format!("bounded{}", bits),
         &[x.0],
@@ -29,8 +41,9 @@ pub fn bound_function<'a>(
     ast: AstFactory<'a>,
     utils: &Utils,
     options: EncodeOptions,
+    encoding_mode: EncodingMode,
 ) -> Function<'a> {
-    let x = ast.new_var("x", ast.backend_bv64_type());
+    let x = ast.new_var("x", encoding_mode.to_viper_type(&ast));
     ast.function(
         "bounded",
         &[x.0],
@@ -71,22 +84,12 @@ impl<'a> Utils<'a> {
         self.ast.new_var("heap", self.heap_typ)
     }
 
-    pub fn local_mem(&self) -> (LocalVarDecl<'_>, Expr<'_>) {
-        self.ast.new_var("local_mem", self.ast.backend_bv64_type())
-    }
-
-    pub fn shared_mem(&self) -> (LocalVarDecl<'_>, Expr<'_>) {
-        self.ast.new_var("shared_mem", self.ast.backend_bv64_type())
-    }
-
     pub fn gv_ref(&self) -> (LocalVarDecl<'a>, Expr<'a>) {
         self.ast.new_var("gv", self.ast.ref_type())
     }
 
     pub fn heap_vars(&self) -> Vec<(LocalVarDecl<'a>, Expr<'a>)> {
-        let heap_vars = vec![
-            self.heap_var(), 
-            self.gv_ref()];
+        let heap_vars = vec![self.heap_var(), self.gv_ref()];
         heap_vars
     }
 

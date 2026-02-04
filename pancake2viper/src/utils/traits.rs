@@ -1,6 +1,9 @@
 use viper::{AstFactory, Expr, LocalVarDecl};
 
-use crate::ir::{self, Type};
+use crate::{
+    ir::{self, Type},
+    utils::EncodingMode,
+};
 
 use std::collections::HashSet;
 
@@ -97,6 +100,7 @@ pub trait ProgramToViper<'a> {
         types: TypeContext,
         ast: AstFactory<'a>,
         options: EncodeOptions,
+        encoding_mode: EncodingMode,
     ) -> Result<viper::Program<'a>, ToViperError>;
 }
 

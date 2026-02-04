@@ -1,7 +1,7 @@
 use viper::{AstFactory, Domain, DomainFunc, Expr, Field, Predicate, Type};
 
-use crate::utils::ViperUtils;
 use crate::ir::SliceType;
+use crate::utils::{EncodingMode, ViperUtils};
 
 #[derive(Clone, Copy)]
 pub struct HeapHelper<'a> {
@@ -9,6 +9,7 @@ pub struct HeapHelper<'a> {
     pub domain: Domain<'a>,
     pub len_f: DomainFunc<'a>,
     pub slot_f: DomainFunc<'a>,
+    pub encoding: EncodingMode,
 }
 
 pub enum MemType {
@@ -20,12 +21,12 @@ pub enum MemType {
 // need to add some more heap specific helper functions with things repeatedly used.
 // and rename this back to IArrayHelper.
 impl<'a> HeapHelper<'a> {
-    pub fn new(ast: AstFactory<'a>) -> Self {
+    pub fn new(ast: AstFactory<'a>, encoding: EncodingMode) -> Self {
         let domain_name = "IArray";
         let iarray_type = ast.domain_type(domain_name, &[], &[]);
         let (a_decl, a) = ast.new_var("a", iarray_type);
         let (r_decl, _r) = ast.new_var("r", ast.ref_type());
-        let (i_decl, i) = ast.new_var("i", ast.backend_bv64_type());
+        let (i_decl, i) = ast.new_var("i", encoding.to_viper_type(&ast));
 
         let slot_f = ast.domain_func(
             "slot",
@@ -34,9 +35,21 @@ impl<'a> HeapHelper<'a> {
             false,
             domain_name,
         );
-        let len_f = ast.domain_func("alen", &[a_decl], ast.backend_bv64_type(), false, domain_name);
+        let len_f = ast.domain_func(
+            "alen",
+            &[a_decl],
+            encoding.to_viper_type(&ast),
+            false,
+            domain_name,
+        );
         let first_f = ast.domain_func("first", &[r_decl], iarray_type, false, domain_name);
-        let second_f = ast.domain_func("second", &[r_decl], ast.backend_bv64_type(), false, domain_name);
+        let second_f = ast.domain_func(
+            "second",
+            &[r_decl],
+            encoding.to_viper_type(&ast),
+            false,
+            domain_name,
+        );
         let functions = [slot_f, len_f, first_f, second_f];
 
         let slot_a_i_app = ast.domain_func_app(slot_f, &[a, i], &[]);
@@ -60,7 +73,10 @@ impl<'a> HeapHelper<'a> {
             ast.forall(
                 &[a_decl],
                 &[ast.trigger(&[len_app])],
-                ast.bv_uge(len_app, ast.bv_zero()),
+                match encoding {
+                    EncodingMode::Int => ast.ge_cmp(len_app, ast.int_zero()),
+                    EncodingMode::Bitvec => ast.bv_uge(len_app, ast.bv_zero()),
+                },
             ),
             domain_name,
         );
@@ -73,6 +89,7 @@ impl<'a> HeapHelper<'a> {
             domain,
             len_f,
             slot_f,
+            encoding,
         }
     }
 
@@ -99,8 +116,12 @@ impl<'a> HeapHelper<'a> {
     /// ```
     pub fn access(&self, array: Expr, idx: Expr, mem: MemType) -> Expr<'a> {
         match mem {
-            MemType::Local => self.ast.field_access(self.slot_f(array, idx), self.field_local()),
-            MemType::Shared => self.ast.field_access(self.slot_f(array, idx), self.field_shared()),
+            MemType::Local => self
+                .ast
+                .field_access(self.slot_f(array, idx), self.field_local()),
+            MemType::Shared => self
+                .ast
+                .field_access(self.slot_f(array, idx), self.field_shared()),
         }
     }
 
@@ -111,12 +132,14 @@ impl<'a> HeapHelper<'a> {
 
     /// Field of an IArray: local Pancake memory
     pub fn field_local(&self) -> Field<'a> {
-        self.ast.field("local_mem", self.ast.backend_bv64_type())
+        self.ast
+            .field("local_mem", self.encoding.to_viper_type(&self.ast))
     }
 
     /// Field of an IArray: shared memory
     pub fn field_shared(&self) -> Field<'a> {
-        self.ast.field("shared_mem", self.ast.backend_bv64_type())
+        self.ast
+            .field("shared_mem", self.encoding.to_viper_type(&self.ast))
     }
 
     /// Encodes the following predicate for slice access of an IArray
@@ -128,8 +151,8 @@ impl<'a> HeapHelper<'a> {
     pub fn slice_acc_def(&self, biw_size: u64) -> Predicate<'a> {
         let ast = self.ast;
         let (src_decl, src) = ast.new_var("src", self.get_type());
-        let (idx_decl, idx) = ast.new_var("idx", ast.backend_bv64_type());
-        let (length_decl, length) = ast.new_var("length", ast.backend_bv64_type());
+        let (idx_decl, idx) = ast.new_var("idx", self.encoding.to_viper_type(&self.ast));
+        let (length_decl, length) = ast.new_var("length", self.encoding.to_viper_type(&self.ast));
         let (perm_decl, perm) = ast.new_var("perm", ast.perm_type());
         self.ast.predicate(
             "slice_acc",
@@ -148,7 +171,7 @@ impl<'a> HeapHelper<'a> {
         let ast = self.ast;
         let (src_decl, src) = ast.new_var("src", self.get_type());
         let (perm_decl, perm) = ast.new_var("perm", ast.perm_type());
-        let l = ast.int_zero();
+        let l = self.encoding.zero(ast);
         let h = self.len_f(src);
         self.ast.predicate(
             "slice_acc",
@@ -161,25 +184,59 @@ impl<'a> HeapHelper<'a> {
     /// ```viper
     ///     forall j: Int :: 0 <= low <= j < upper <= alen(heap) ==> acc(heap[j].heap_elem)
     /// ```
-    pub fn heap_acc_expr(&self, array: Expr, low: Expr, upper: Expr, typ: SliceType, perm: Expr, _biw_size: u64) -> Expr<'a> {
+    pub fn heap_acc_expr(
+        &self,
+        array: Expr,
+        low: Expr,
+        upper: Expr,
+        typ: SliceType,
+        perm: Expr,
+        _biw_size: u64,
+    ) -> Expr<'a> {
         let ast: AstFactory<'a> = self.ast;
-        let (j_decl, j) = ast.new_var("j", ast.backend_bv64_type());
-        let zero = ast.bv_zero();
-        let limit = self.len_f(array);
+        match self.encoding {
+            EncodingMode::Int => {
+                let (j_decl, j) = ast.new_var("j", ast.int_type());
+                let zero = ast.int_zero();
+                let limit = self.len_f(array);
 
-        let i0 = ast.bv_ule(zero, low);
-        let ij = ast.bv_ule(low, j);
-        let jl = match typ {
-            SliceType::Exclusive => ast.bv_ult(j, upper),
-            SliceType::Inclusive => ast.bv_ule(j, upper),
-        };
-        let lu = ast.bv_ule(upper, limit);
-        // let bytes_in_word = ast.int_lit(biw_size);
-        // let align = ast.eq_cmp(ast.module(j, bytes_in_word), ast.int_lit(0));
-        let guard = ast.and(ast.and(i0, ij), ast.and(jl, lu));
+                let i0 = ast.le_cmp(zero, low);
+                let ij = ast.le_cmp(low, j);
+                let jl = match typ {
+                    SliceType::Exclusive => ast.lt_cmp(j, upper),
+                    SliceType::Inclusive => ast.le_cmp(j, upper),
+                };
+                let lu = ast.le_cmp(upper, limit);
+                // let bytes_in_word = ast.int_lit(biw_size);
+                // let align = ast.eq_cmp(ast.module(j, bytes_in_word), ast.int_lit(0));
+                let guard = ast.and(ast.and(i0, ij), ast.and(jl, lu));
 
-        let access = ast.field_access_predicate(self.access(array, j, MemType::Local), perm);
+                let access =
+                    ast.field_access_predicate(self.access(array, j, MemType::Local), perm);
 
-        ast.forall(&[j_decl], &[], ast.implies(guard, access))
+                ast.forall(&[j_decl], &[], ast.implies(guard, access))
+            }
+            EncodingMode::Bitvec => {
+                let (j_decl, j) = ast.new_var("j", ast.backend_bv64_type());
+                let zero = ast.bv_zero();
+                let limit = self.len_f(array);
+
+                let i0 = ast.bv_ule(zero, low);
+                let ij = ast.bv_ule(low, j);
+                let jl = match typ {
+                    SliceType::Exclusive => ast.bv_ult(j, upper),
+                    SliceType::Inclusive => ast.bv_ule(j, upper),
+                };
+                let lu = ast.bv_ule(upper, limit);
+                // let bytes_in_word = ast.int_lit(biw_size);
+                // let align = ast.eq_cmp(ast.module(j, bytes_in_word), ast.int_lit(0));
+                let guard = ast.and(ast.and(i0, ij), ast.and(jl, lu));
+
+                let access =
+                    ast.field_access_predicate(self.access(array, j, MemType::Local), perm);
+
+                ast.forall(&[j_decl], &[], ast.implies(guard, access))
+            }
+        }
     }
 }

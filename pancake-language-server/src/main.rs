@@ -107,7 +107,12 @@ impl Backend {
         program.mangle(&mut mangler)?;
         let ctx = program.resolve_types()?;
         let program = program.const_eval(&EncodeOptions::default());
-        let program = program.to_viper(ctx, viper.ast, EncodeOptions::default())?;
+        let program = program.to_viper(
+            ctx,
+            viper.ast,
+            EncodeOptions::default(),
+            pancake2viper::utils::EncodingMode::Int,
+        )?;
 
         self.create_vpr_file(uri, viper.pretty_print(program)).await;
         Ok(())
@@ -175,7 +180,12 @@ impl Backend {
         let program = program.const_eval(&EncodeOptions::default());
         let ctx = program.resolve_types().unwrap();
         let program = program
-            .to_viper(ctx, viper.ast, EncodeOptions::default())
+            .to_viper(
+                ctx,
+                viper.ast,
+                EncodeOptions::default(),
+                pancake2viper::utils::EncodingMode::Int,
+            )
             .unwrap();
         let ver = viper.verify(program).0;
         let result = serde_json::json!({

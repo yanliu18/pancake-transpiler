@@ -155,7 +155,7 @@ impl Add<u64> for Expr {
 impl UnOpType {
     pub fn eval(&self, value: u64) -> u64 {
         match self {
-            Self::Minus => 0 - value,
+            Self::Minus => 0u64.wrapping_sub(value),
             Self::Neg => {
                 if value == 0 {
                     1

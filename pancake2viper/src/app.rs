@@ -5,7 +5,7 @@ use std::rc::Rc;
 use std::{fs::File, io::Write};
 
 use crate::cli::{self, CliOptions};
-use crate::utils::{EncodeOptions, MethodContext, TypeContext, ViperEncodeCtx};
+use crate::utils::{EncodeOptions, EncodingMode, MethodContext, TypeContext, ViperEncodeCtx};
 use crate::{
     ir::{self, shared::SharedContext},
     pancake,
@@ -134,6 +134,7 @@ impl App {
         type_ctx: TypeContext,
         viper_handle: &ViperHandle,
         encode_opts: EncodeOptions,
+        encode_mode: EncodingMode,
         program: ir::Program,
         output_path: String,
     ) -> Result<()> {
@@ -157,6 +158,7 @@ impl App {
                 .collect(),
             program.extern_methods.clone(),
             program.extern_fields.clone(),
+            encode_mode,
         );
         let gen_methods = shared.gen_boilerplate(&mut ctx, &model)?;
         let program = viper_handle.ast.program(&[], &[], &[], &[], &gen_methods);
@@ -209,6 +211,10 @@ impl App {
         })?
         .try_into()?;
         let encode_opts = self.options.clone().into();
+        let encoding_mode = match self.options.encoding_mode {
+            cli::EncodingModeArgs::Int => EncodingMode::Int,
+            cli::EncodingModeArgs::Bitvec => EncodingMode::Bitvec,
+        };
 
         let fields_set = program
             .model
@@ -241,6 +247,7 @@ impl App {
                 ctx,
                 &viper_handle,
                 encode_opts,
+                encoding_mode,
                 program,
                 output_path.clone(),
             );
@@ -261,6 +268,7 @@ impl App {
                 ctx.clone(),
                 &mut viper_handle,
                 encode_opts,
+                encoding_mode,
                 use_viper_cli,
                 true,
             )?;
@@ -280,6 +288,7 @@ impl App {
                     ctx.clone(),
                     &mut viper_handle,
                     encode_opts,
+                    encoding_mode,
                     use_viper_cli,
                     false,
                 )?;
@@ -291,6 +300,7 @@ impl App {
                 ctx,
                 &mut viper_handle,
                 encode_opts,
+                encoding_mode,
                 use_viper_cli,
                 true,
             )?;
@@ -313,14 +323,16 @@ impl App {
         ctx: TypeContext,
         viper_handle: &mut ViperHandle,
         encode_opts: EncodeOptions,
+        encoding_mode: EncodingMode,
         use_viper_cli: bool,
         refute_in_includes: bool,
     ) -> Result<()> {
         self.print_name(&name);
         self.println("Transpiling to Viper...");
-        let vpr_program = program
-            .clone()
-            .to_viper(ctx.clone(), viper_handle.ast, encode_opts)?;
+        let vpr_program =
+            program
+                .clone()
+                .to_viper(ctx.clone(), viper_handle.ast, encode_opts, encoding_mode)?;
         let transpiled = viper_handle.utils.pretty_print(vpr_program);
 
         let transpiled = self.add_includes_model(transpiled, refute_in_includes)?;

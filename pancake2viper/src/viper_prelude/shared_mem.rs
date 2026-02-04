@@ -1,13 +1,17 @@
 use viper::{AstFactory, Method};
 
-use crate::utils::ViperUtils;
+use crate::utils::{EncodingMode, ViperUtils};
 
 use super::utils::Utils;
 
-pub fn create_shared_mem_methods<'a>(ast: AstFactory<'a>, utils: &Utils<'a>) -> Vec<Method<'a>> {
-    let address = ast.new_var("address", ast.backend_bv64_type());
+pub fn create_shared_mem_methods<'a>(
+    ast: AstFactory<'a>,
+    utils: &Utils<'a>,
+    encoding: EncodingMode,
+) -> Vec<Method<'a>> {
+    let address = ast.new_var("address", encoding.to_viper_type(&ast));
     let heap = utils.heap_vars();
-    let value = ast.new_var("value", ast.backend_bv64_type());
+    let value = ast.new_var("value", encoding.to_viper_type(&ast));
     let mut store_args = utils.get_model().get_default_args(ast, heap).0;
     store_args.push(address.0);
     let load_args = store_args.clone();
