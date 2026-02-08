@@ -33,9 +33,9 @@ impl SharedInternal {
         let ast = ctx.ast;
         if self.addresses.len() <= 3 {
             let mut addresses = self.addresses.iter();
-            let init = ast.eq_cmp(addr, ast.backend_bv64_lit(*addresses.next().unwrap()));
+            let init = ast.eq_cmp(addr, ctx.encoding_mode.lit(ast, *addresses.next().unwrap()));
             addresses.fold(init, |acc, e| {
-                ast.bv_or(acc, ast.eq_cmp(addr, ast.backend_bv64_lit(*e)))
+                ast.or(acc, ast.eq_cmp(addr, ctx.encoding_mode.lit(ast, *e)))
             })
         } else {
             match ctx.encoding_mode {
@@ -81,7 +81,10 @@ impl SharedInternal {
             let mut pres = model.predicates.clone().to_viper(ctx)?;
             let mut posts = pres.clone();
             pres.push(self.get_precondition(ctx, addr.1));
-            posts.push(ctx.utils.bounded_f(retval.1, self.size.bits() as u64));
+            posts.push(
+                ctx.utils
+                    .bounded_f(retval.1, self.size.bits() as u64, ctx.encoding_mode),
+            );
             let mut args = ctx.get_default_args().0;
             args.push(addr.0);
             methods.push(ast.method(
@@ -97,7 +100,10 @@ impl SharedInternal {
             let mut pres = model.predicates.clone().to_viper(ctx)?;
             let posts = pres.clone();
             pres.push(self.get_precondition(ctx, addr.1));
-            pres.push(ctx.utils.bounded_f(value.1, self.size.bits() as u64));
+            pres.push(
+                ctx.utils
+                    .bounded_f(value.1, self.size.bits() as u64, ctx.encoding_mode),
+            );
             let mut args = ctx.get_default_args().0;
             args.push(addr.0);
             args.push(value.0);

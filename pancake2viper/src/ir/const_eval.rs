@@ -4,9 +4,8 @@ use crate::{
 };
 
 use super::{
-    AbstractMethod, BinOp, BinOpType, Expr, FnDec, Function, Model, Predicate, Program, Shared,
-    Shift, Stmt, UnOp, UnOpType,
-    GlobalVar,
+    AbstractMethod, BinOp, BinOpType, Expr, FnDec, Function, GlobalVar, Model, Predicate, Program,
+    Shared, Shift, Stmt, UnOp, UnOpType,
 };
 
 impl ConstEvalExpr for Expr {
@@ -31,7 +30,7 @@ impl ConstEvalExpr for Expr {
                 size: l.size,
             }),
             BinOp(b) => b.const_eval(options),
-            Contains(c) => Contains( ir::Contains {
+            Contains(c) => Contains(ir::Contains {
                 left: Box::new(c.left.const_eval(options)),
                 right: Box::new(c.right.const_eval(options)),
             }),
@@ -103,15 +102,6 @@ impl ConstEvalExpr for BinOp {
                 if self.optype.is_arithmetic() || self.optype.is_bitwise() =>
             {
                 Expr::Const(self.optype.eval(l, r))
-            }
-            (l, Expr::Const(r))
-                if self.optype == BinOpType::BitAnd && (r + 1).count_ones() == 1 =>
-            {
-                Expr::BinOp(BinOp {
-                    optype: BinOpType::Modulo,
-                    left: Box::new(l),
-                    right: Box::new(Expr::Const(r + 1)),
-                })
             }
             (l, r) => Expr::BinOp(BinOp {
                 optype: self.optype,

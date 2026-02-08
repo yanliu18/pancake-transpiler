@@ -137,7 +137,7 @@ impl Default for TypeContext {
     }
 }
 
-#[derive(PartialEq, Eq, Copy, Clone)]
+#[derive(PartialEq, Eq, Copy, Clone, Debug)]
 pub enum EncodingMode {
     Int,
     Bitvec,

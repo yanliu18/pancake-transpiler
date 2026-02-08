@@ -8,7 +8,7 @@ use std::vec;
 use bitvector::create_bv_domain;
 pub use heap::HeapHelper;
 use shared_mem::create_shared_mem_methods;
-use utils::{bound_bits_function, bound_function, Utils};
+use utils::{bound_bits_bv_function, bound_bits_function, bound_function, Utils};
 use viper::{AstFactory, Domain, Field, Function, Method};
 
 use crate::{
@@ -40,7 +40,12 @@ pub fn create_viper_prelude(
         methods,
         [8, 16, 32, 64]
             .into_iter()
-            .map(|bits| bound_bits_function(ast, bits, encoding_mode))
+            .flat_map(|bits| {
+                [
+                    bound_bits_bv_function(ast, bits),
+                    bound_bits_function(ast, bits),
+                ]
+            })
             .chain(std::iter::once(bound_function(
                 ast,
                 &utils,

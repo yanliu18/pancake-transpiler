@@ -51,8 +51,11 @@ impl Arg {
                             &[],
                             ast.implies(
                                 ast.and(ast.le_cmp(ast.int_zero(), i.1), ast.lt_cmp(i.1, length)),
-                                ctx.utils
-                                    .bounded_f(ast.seq_index(arg_var, i.1), ctx.options.word_size),
+                                ctx.utils.bounded_f(
+                                    ast.seq_index(arg_var, i.1),
+                                    ctx.options.word_size,
+                                    ctx.encoding_mode,
+                                ),
                             ),
                         );
                         Some(ast.and(length_pre, bound_pre))
@@ -61,7 +64,11 @@ impl Arg {
                         if is_predicate {
                             None
                         } else {
-                            Some(ctx.utils.bounded_f(arg_var, ctx.options.word_size))
+                            Some(ctx.utils.bounded_f(
+                                arg_var,
+                                ctx.options.word_size,
+                                ctx.encoding_mode,
+                            ))
                         }
                     }
                     _ => None,
@@ -99,12 +106,18 @@ impl FnDec {
         match ctx.get_type(&self.retvar).unwrap() {
             Type::Int => {
                 let retval = ast.local_var(&self.retvar, ast.int_type());
-                Some(ctx.utils.bounded_f(retval, ctx.options.word_size))
+                Some(
+                    ctx.utils
+                        .bounded_f(retval, ctx.options.word_size, ctx.encoding_mode),
+                )
             }
             Type::Word => match ctx.encoding_mode {
                 EncodingMode::Int => {
                     let retval = ast.local_var(&self.retvar, ast.int_type());
-                    Some(ctx.utils.bounded_f(retval, ctx.options.word_size))
+                    Some(
+                        ctx.utils
+                            .bounded_f(retval, ctx.options.word_size, ctx.encoding_mode),
+                    )
                 }
                 EncodingMode::Bitvec => None,
             },
@@ -121,8 +134,11 @@ impl FnDec {
                         &[],
                         ast.implies(
                             ast.and(ast.le_cmp(ast.int_zero(), i.1), ast.lt_cmp(i.1, length)),
-                            ctx.utils
-                                .bounded_f(ast.seq_index(retval, i.1), ctx.options.word_size),
+                            ctx.utils.bounded_f(
+                                ast.seq_index(retval, i.1),
+                                ctx.options.word_size,
+                                ctx.encoding_mode,
+                            ),
                         ),
                     );
 

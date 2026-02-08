@@ -1,10 +1,11 @@
 use std::collections::HashSet;
+use std::io::{BufRead, BufReader};
 use std::path::Path;
 use std::process::Command;
 use std::rc::Rc;
 use std::{fs::File, io::Write};
 
-use crate::cli::{self, CliOptions};
+use crate::cli::{self, CliOptions, EncodingModeArgs};
 use crate::utils::{EncodeOptions, EncodingMode, MethodContext, TypeContext, ViperEncodeCtx};
 use crate::{
     ir::{self, shared::SharedContext},
@@ -211,11 +212,6 @@ impl App {
         })?
         .try_into()?;
         let encode_opts = self.options.clone().into();
-        let encoding_mode = match self.options.encoding_mode {
-            cli::EncodingModeArgs::Int => EncodingMode::Int,
-            cli::EncodingModeArgs::Bitvec => EncodingMode::Bitvec,
-        };
-
         let fields_set = program
             .model
             .fields
@@ -243,6 +239,13 @@ impl App {
         });
 
         if let cli::Command::Generate(cli::Generate { output_path, .. }) = &self.options.cmd {
+            let encoding_mode = match self.options.encoding_mode {
+                cli::EncodingModeArgs::Int => EncodingMode::Int,
+                cli::EncodingModeArgs::Bitvec => EncodingMode::Bitvec,
+                cli::EncodingModeArgs::Both => todo!(),
+                cli::EncodingModeArgs::Mapped => unreachable!(),
+            };
+
             return self.generate(
                 ctx,
                 &viper_handle,
@@ -262,13 +265,17 @@ impl App {
             // firstly, just the external functions
             let mut single_program = program.clone();
             single_program.trust_except(&[]);
-            self.do_program(
+            self.do_program_encoding(
                 Some("top_level".to_owned()),
                 single_program,
                 ctx.clone(),
                 &mut viper_handle,
                 encode_opts,
-                encoding_mode,
+                App::map_encoding_mode(
+                    "top_level",
+                    self.options.encoding_mode.clone(),
+                    self.options.encoding_mode_map.clone(),
+                ),
                 use_viper_cli,
                 true,
             )?;
@@ -282,25 +289,29 @@ impl App {
                 let mut single_program = program.clone();
                 single_program.trust_except(&[fun.fname.to_owned()]);
                 single_program.prune_uncalled();
-                self.do_program(
+                self.do_program_encoding(
                     Some(fun.fname.to_owned()),
                     single_program,
                     ctx.clone(),
                     &mut viper_handle,
                     encode_opts,
-                    encoding_mode,
+                    App::map_encoding_mode(
+                        &fun.fname,
+                        self.options.encoding_mode.clone(),
+                        self.options.encoding_mode_map.clone(),
+                    ),
                     use_viper_cli,
                     false,
                 )?;
             }
         } else {
-            self.do_program(
+            self.do_program_encoding(
                 None,
                 program,
                 ctx,
                 &mut viper_handle,
                 encode_opts,
-                encoding_mode,
+                self.options.encoding_mode.clone(),
                 use_viper_cli,
                 true,
             )?;
@@ -316,16 +327,61 @@ impl App {
         }
     }
 
-    fn do_program(
+    fn do_program_encoding(
         &self,
         name: Option<String>,
         program: ir::Program,
         ctx: TypeContext,
         viper_handle: &mut ViperHandle,
         encode_opts: EncodeOptions,
+        encoding_mode: EncodingModeArgs,
+        use_viper_cli: bool,
+        refute_in_includes: bool,
+    ) -> Result<()> {
+        let encoding_modes = match encoding_mode {
+            EncodingModeArgs::Int => [EncodingMode::Int].to_vec(),
+            EncodingModeArgs::Bitvec => [EncodingMode::Bitvec].to_vec(),
+            EncodingModeArgs::Both => [EncodingMode::Int, EncodingMode::Bitvec].to_vec(),
+            EncodingModeArgs::Mapped => unreachable!(),
+        };
+        for encoder in encoding_modes {
+            let new_path = self.options.cmd.get_output_path();
+            let new_path = match new_path {
+                Some(p) if encoding_mode == EncodingModeArgs::Both => {
+                    Some(match p.rsplit_once(".") {
+                        Some((front, back)) => format!("{}--{:?}.{}", front, encoder, back),
+                        None => format!("{}--{:?}", p, encoder),
+                    })
+                }
+                _ => new_path,
+            };
+
+            self.do_program(
+                name.clone(),
+                program.clone(),
+                &ctx,
+                viper_handle,
+                encode_opts,
+                encoder,
+                use_viper_cli,
+                refute_in_includes,
+                new_path,
+            );
+        }
+        Ok(())
+    }
+
+    fn do_program(
+        &self,
+        name: Option<String>,
+        program: ir::Program,
+        ctx: &TypeContext,
+        viper_handle: &mut ViperHandle,
+        encode_opts: EncodeOptions,
         encoding_mode: EncodingMode,
         use_viper_cli: bool,
         refute_in_includes: bool,
+        maybe_path: Option<String>,
     ) -> Result<()> {
         self.print_name(&name);
         self.println("Transpiling to Viper...");
@@ -338,7 +394,7 @@ impl App {
         let transpiled = self.add_includes_model(transpiled, refute_in_includes)?;
 
         // Save the transpiled Viper code in a file
-        if let Some(path) = &self.options.cmd.get_output_path() {
+        if let Some(path) = &maybe_path {
             let modified = match &name {
                 Some(s) => match path.rsplit_once(".") {
                     Some((front, back)) => format!("{}--{}.{}", front, s, back),
@@ -359,5 +415,36 @@ impl App {
             self.verify(viper_handle, vpr_program, transpiled, "*", use_viper_cli)?;
         }
         Ok(())
+    }
+
+    fn map_encoding_mode(
+        name: &str,
+        encoding_mode: EncodingModeArgs,
+        opt_filename: Option<String>,
+    ) -> EncodingModeArgs {
+        if encoding_mode == EncodingModeArgs::Mapped {
+            if let Some(filename) = opt_filename {
+                let file = File::open(filename.clone()).unwrap();
+                let reader = BufReader::new(file);
+                for line in reader.lines() {
+                    if let Some((function, encoding)) = line.unwrap().split_once(' ') {
+                        if name.strip_prefix("f_").unwrap_or(name) == function {
+                            return match encoding {
+                                "Int" => EncodingModeArgs::Int,
+                                "Bitvec" => EncodingModeArgs::Bitvec,
+                                _ => {
+                                    panic!("{} is not a valid encoding for {}", encoding, function)
+                                }
+                            };
+                        }
+                    }
+                }
+                panic!("{} not found in mapping file", name);
+            } else {
+                unreachable!();
+            }
+        } else {
+            return encoding_mode;
+        }
     }
 }

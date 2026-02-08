@@ -152,12 +152,16 @@ impl From<ClapGenerate> for Generate {
     }
 }
 
-#[derive(ValueEnum, Clone, Debug)]
+#[derive(ValueEnum, Clone, Debug, PartialEq, Eq)]
 pub enum EncodingModeArgs {
     #[value(name = "int")]
     Int,
     #[value(name = "bitvec")]
     Bitvec,
+    #[value(name = "both")]
+    Both,
+    #[value(name = "mapped")]
+    Mapped,
 }
 
 #[derive(Debug, Parser, Clone)]
@@ -297,6 +301,13 @@ pub struct ClapCliOptions {
         value_enum
     )]
     pub encoding_mode: EncodingModeArgs,
+
+    #[arg(
+        global = true,
+        long,
+        help = "File mapping functions to encodings, for use with --encoding-mode=mapped"
+    )]
+    pub encoding_mode_map: Option<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -324,6 +335,7 @@ pub struct CliOptions {
     pub include: Vec<String>,
     pub counter_example: bool,
     pub encoding_mode: EncodingModeArgs,
+    pub encoding_mode_map: Option<String>,
 }
 
 impl From<ClapCliOptions> for CliOptions {
@@ -335,6 +347,14 @@ impl From<ClapCliOptions> for CliOptions {
         assert!(
             value.heap_top % 1024 == 0,
             "Heap Top has to be page aligned by 1024."
+        );
+        assert!(
+            !(value.encoding_mode == EncodingModeArgs::Mapped && !value.incremental),
+            "--encoding-mode=mapped does not make sense without --incremental"
+        );
+        assert!(
+            !(value.encoding_mode == EncodingModeArgs::Mapped && value.encoding_mode_map == None),
+            "--encoding-mode=mapped requires --encoding-mode-map to be set"
         );
         Self {
             cmd: value.cmd.into(),
@@ -359,6 +379,7 @@ impl From<ClapCliOptions> for CliOptions {
             include: value.include.unwrap_or_default(),
             counter_example: value.counter_example,
             encoding_mode: value.encoding_mode,
+            encoding_mode_map: value.encoding_mode_map,
         }
     }
 }
@@ -388,6 +409,7 @@ impl Default for CliOptions {
             include: vec![],
             counter_example: false,
             encoding_mode: EncodingModeArgs::Int,
+            encoding_mode_map: None,
         }
     }
 }

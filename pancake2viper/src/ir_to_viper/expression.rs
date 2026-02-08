@@ -78,10 +78,16 @@ impl<'a> TryToViper<'a> for ir::BinOp {
                 self.left.force_to_bool(ctx)?,
                 self.right.force_to_bool(ctx)?,
             ),
-            PancakeEqual | PancakeNotEqual if left_type != right_type => (
-                self.left.force_to_bool(ctx)?,
-                self.right.force_to_bool(ctx)?,
-            ),
+            PancakeEqual | PancakeNotEqual
+                if left_type != right_type
+                    && !(left_type == Type::Int && right_type == Type::Word)
+                    && !(left_type == Type::Word && right_type == Type::Int) =>
+            {
+                (
+                    self.left.force_to_bool(ctx)?,
+                    self.right.force_to_bool(ctx)?,
+                )
+            }
             _ => (self.left.to_viper(ctx)?, self.right.to_viper(ctx)?),
         };
         let binop = ctx
@@ -122,7 +128,8 @@ impl<'a> TryToViper<'a> for ir::BinOp {
 
             if ctx.options.check_overflows && ctx.encoding_mode == EncodingMode::Int {
                 let assertion = ast.assert(
-                    ctx.utils.bounded_f(fresh_var.1, ctx.options.word_size),
+                    ctx.utils
+                        .bounded_f(fresh_var.1, ctx.options.word_size, ctx.encoding_mode),
                     ast.no_position(),
                 );
                 ctx.stack.push(assertion);
@@ -251,11 +258,13 @@ impl<'a> TryToViper<'a> for ir::FunctionCall {
                     ast.full_perm(),
                 )
             }
-            "f_bounded" => ctx.utils.bounded_f(args[0], ctx.options.word_size),
-            "f_bounded8" => ctx.utils.bounded_f(args[0], 8),
-            "f_bounded16" => ctx.utils.bounded_f(args[0], 16),
-            "f_bounded32" => ctx.utils.bounded_f(args[0], 32),
-            "f_bounded64" => ctx.utils.bounded_f(args[0], 64),
+            "f_bounded" => ctx
+                .utils
+                .bounded_f(args[0], ctx.options.word_size, ctx.encoding_mode),
+            "f_bounded8" => ctx.utils.bounded_f(args[0], 8, ctx.encoding_mode),
+            "f_bounded16" => ctx.utils.bounded_f(args[0], 16, ctx.encoding_mode),
+            "f_bounded32" => ctx.utils.bounded_f(args[0], 32, ctx.encoding_mode),
+            "f_bounded64" => ctx.utils.bounded_f(args[0], 64, ctx.encoding_mode),
             fname => {
                 base_args.extend(args);
 

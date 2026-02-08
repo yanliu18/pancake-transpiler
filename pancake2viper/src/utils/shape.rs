@@ -2,7 +2,7 @@ use std::fmt::Display;
 
 use super::{errors::ShapeError, traits::ToViperType, ViperEncodeCtx};
 
-#[derive(Debug, Clone, Eq, PartialEq, Hash)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, PartialOrd, Ord)]
 pub enum Shape {
     Simple,
     Nested(Vec<Self>),

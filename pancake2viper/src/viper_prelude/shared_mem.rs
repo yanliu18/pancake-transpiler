@@ -24,7 +24,7 @@ pub fn create_shared_mem_methods<'a>(
                 &format!("shared_store{}", bits),
                 &store_args,
                 &[],
-                &[utils.bounded_f(value.1, bits)],
+                &[utils.bounded_f(value.1, bits, encoding)],
                 &[],
                 None,
             );
@@ -33,7 +33,7 @@ pub fn create_shared_mem_methods<'a>(
                 &load_args,
                 &[value.0],
                 &[],
-                &[utils.bounded_f(value.1, bits)],
+                &[utils.bounded_f(value.1, bits, encoding)],
                 None,
             );
             vec![load, store]
