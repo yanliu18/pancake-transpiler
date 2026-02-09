@@ -366,7 +366,7 @@ impl App {
                 use_viper_cli,
                 refute_in_includes,
                 new_path,
-            );
+            )?;
         }
         Ok(())
     }
