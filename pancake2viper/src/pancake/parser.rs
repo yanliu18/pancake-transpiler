@@ -1,5 +1,4 @@
 use anyhow::anyhow;
-use tracing::debug;
 use pest::Parser as _;
 use pest_derive::Parser;
 use regex::Regex;
@@ -10,6 +9,7 @@ use std::{
     process::{Command, Stdio},
     str::FromStr,
 };
+use tracing::debug;
 
 use super::*;
 use crate::{pancake, utils::Shape};
@@ -66,9 +66,10 @@ impl Expr {
             [Symbol(cons), Symbol(word)] if cons == "Const" && word.starts_with("0x") => {
                 Ok(Self::Const(u64::from_str_radix(&word[2..], 16)?))
             }
-            [Symbol(var), Symbol(scope), Symbol(name)] if var == "Var" => {
-                Ok(Self::Var(Var {name: name.clone(), global: scope == "global"}))
-            }
+            [Symbol(var), Symbol(scope), Symbol(name)] if var == "Var" => Ok(Self::Var(Var {
+                name: name.clone(),
+                global: scope == "global",
+            })),
             [Symbol(label), Symbol(name)] if label == "Label" => Ok(Self::Label(name.clone())),
             [Symbol(struc), exps @ ..] if struc == "Struct" => {
                 Ok(Self::Struct(Struct::new(Self::parse_slice(exps)?)))
@@ -104,17 +105,19 @@ impl Expr {
             })),
             [Symbol(base)] if base == "BaseAddr" => Ok(Self::BaseAddr),
             [Symbol(bytes)] if bytes == "BytesInWord" => Ok(Self::BytesInWord),
-            [Symbol(op), List(label), List(args), Symbol(_)] |
-            [Symbol(op), List(label), List(args)] 
-            if op == "call" => {
+            [Symbol(op), List(label), List(args), Symbol(_)]
+            | [Symbol(op), List(label), List(args)]
+                if op == "call" =>
+            {
                 Ok(Self::Call(ExprCall {
                     fname: Box::new(Self::parse(label)?),
                     args: Self::parse_slice(args)?,
                 }))
             }
-            [Symbol(op), Symbol(fname), List(args), Symbol(_)] |
-            [Symbol(op), Symbol(fname), List(args)]
-            if op == "call" => {
+            [Symbol(op), Symbol(fname), List(args), Symbol(_)]
+            | [Symbol(op), Symbol(fname), List(args)]
+                if op == "call" =>
+            {
                 Ok(Self::Call(ExprCall {
                     fname: Box::new(Self::Label(fname.clone())),
                     args: Self::parse_slice(args)?,
@@ -129,9 +132,10 @@ impl Expr {
             [Symbol(op), exps @ ..] => {
                 let st: Result<OpType, strum::ParseError> = OpType::from_str(op);
                 Ok(Self::Op(Op {
-                optype: st?,
-                operands: Self::parse_slice(exps)?,
-            }))},
+                    optype: st?,
+                    operands: Self::parse_slice(exps)?,
+                }))
+            }
             x => panic!("Could not parse expr: {:?}", x),
         }
     }
@@ -166,43 +170,40 @@ impl Stmt {
             [Symbol(op), List(decl)] if op == "dec" => {
                 Self::parse_dec(decl.iter().collect::<Vec<_>>(), None)
             }
-            [Symbol(var), Symbol(eq), List(exp)]
-                if eq == ":=" =>
-                Ok(Self::Assign(Assign {
+            [Symbol(var), Symbol(eq), List(exp)] if eq == ":=" => Ok(Self::Assign(Assign {
                 lhs: var.clone(),
                 rhs: Expr::parse(exp)?,
                 global: false,
             })),
-            [Symbol(l), Symbol(var), Symbol(eq), List(exp)] 
-                if l == "local" && eq == ":=" => 
+            [Symbol(l), Symbol(var), Symbol(eq), List(exp)] if l == "local" && eq == ":=" => {
                 Ok(Self::Assign(Assign {
-                lhs: var.clone(),
-                rhs: Expr::parse(exp)?,
-                global: false,
-            })),
-            [Symbol(g), Symbol(gv_name), Symbol(eq), List(exp)]
-            if g == "global" && eq == ":=" => {
+                    lhs: var.clone(),
+                    rhs: Expr::parse(exp)?,
+                    global: false,
+                }))
+            }
+            [Symbol(g), Symbol(gv_name), Symbol(eq), List(exp)] if g == "global" && eq == ":=" => {
                 Ok(Self::Assign(Assign {
                     lhs: gv_name.clone(),
                     rhs: Expr::parse(exp)?,
                     global: true,
                 }))
-            },
-            [Symbol(op), List(addr), Symbol(eq), List(exp)] 
-                if op == "mem" && eq == ":=" => {
+            }
+            [Symbol(op), List(addr), Symbol(eq), List(exp)] if op == "mem" && eq == ":=" => {
                 Ok(Self::Store(Store {
                     address: Expr::parse(addr)?,
                     value: Expr::parse(exp)?,
                 }))
             }
             [Symbol(op), List(addr), Symbol(eq), Symbol(byte), List(exp)]
-                if op == "mem" && eq == ":=" && byte == "byte" => {
-                    Ok(Self::StoreBits(StoreBits {
-                        address: Expr::parse(addr)?,
-                        value: Expr::parse(exp)?,
-                        size: MemOpBytes::Byte,
-                    }))
-                }
+                if op == "mem" && eq == ":=" && byte == "byte" =>
+            {
+                Ok(Self::StoreBits(StoreBits {
+                    address: Expr::parse(addr)?,
+                    value: Expr::parse(exp)?,
+                    size: MemOpBytes::Byte,
+                }))
+            }
             [Symbol(l), Symbol(op), List(addr), Symbol(eq), Symbol(byte), List(exp)]
                 if l == "local" && op == "mem" && eq == ":=" && byte == "byte" =>
             {
@@ -244,7 +245,7 @@ impl Stmt {
             }
 
             [Symbol(op), Symbol(size), List(addr), List(exp)]
-            if op == "shared_mem_store" && size == "word16" =>
+                if op == "shared_mem_store" && size == "word16" =>
             {
                 Ok(Self::SharedStoreBits(SharedStoreBits {
                     address: Expr::parse(addr)?,
@@ -259,7 +260,10 @@ impl Stmt {
             {
                 Ok(Self::SharedLoad(SharedLoad {
                     address: Expr::parse(exp)?,
-                    dst: Expr::Var(Var{name: dst.to_string(), global: scope == "global"}),
+                    dst: Expr::Var(Var {
+                        name: dst.to_string(),
+                        global: scope == "global",
+                    }),
                 }))
             }
 
@@ -268,7 +272,10 @@ impl Stmt {
             {
                 Ok(Self::SharedLoadBits(SharedLoadBits {
                     address: Expr::parse(exp)?,
-                    dst: Expr::Var(Var{name: dst.to_string(), global: scope == "global"}),
+                    dst: Expr::Var(Var {
+                        name: dst.to_string(),
+                        global: scope == "global",
+                    }),
                     size: MemOpBytes::Byte,
                 }))
             }
@@ -278,17 +285,23 @@ impl Stmt {
             {
                 Ok(Self::SharedLoadBits(SharedLoadBits {
                     address: Expr::parse(exp)?,
-                    dst: Expr::Var(Var{name: dst.to_string(), global: scope == "global"}),
+                    dst: Expr::Var(Var {
+                        name: dst.to_string(),
+                        global: scope == "global",
+                    }),
                     size: MemOpBytes::HalfWord,
                 }))
             }
 
             [Symbol(op), Symbol(size), Symbol(scope), Symbol(dst), List(exp)]
-            if op == "shared_mem_load" && size == "word16" =>
+                if op == "shared_mem_load" && size == "word16" =>
             {
                 Ok(Self::SharedLoadBits(SharedLoadBits {
                     address: Expr::parse(exp)?,
-                    dst: Expr::Var(Var{name: dst.to_string(), global: scope == "global"}),
+                    dst: Expr::Var(Var {
+                        name: dst.to_string(),
+                        global: scope == "global",
+                    }),
                     size: MemOpBytes::QuarterWord,
                 }))
             }
@@ -383,37 +396,31 @@ impl Stmt {
         };
         match &decl[..] {
             // todo: clean up shape-checking support
-            [Int(1), Symbol(s), Symbol(var), Symbol(eq), List(exp)] |
-            [Symbol(_), Symbol(s), Symbol(var), Symbol(eq), List(exp)]
-                if s == "local" && eq == ":=" => 
+            [Int(1), Symbol(s), Symbol(var), Symbol(eq), List(exp)]
+            | [Symbol(_), Symbol(s), Symbol(var), Symbol(eq), List(exp)]
+                if s == "local" && eq == ":=" =>
             {
                 Ok(Self::Declaration(Declaration {
                     lhs: var.clone(),
                     rhs: Expr::parse(exp)?,
                     scope: Box::new(scope),
                 }))
-            },
-            [Int(1), Symbol(var), Symbol(eq), List(exp)]
-                if eq == ":=" =>
-            {
+            }
+            [Int(1), Symbol(var), Symbol(eq), List(exp)] if eq == ":=" => {
                 Ok(Self::Declaration(Declaration {
                     lhs: var.clone(),
                     rhs: Expr::parse(exp)?,
                     scope: Box::new(scope),
                 }))
-            },
-            [Symbol(_shape), Symbol(var), Symbol(eq), List(exp)]
-                if eq == ":=" =>
-            {
+            }
+            [Symbol(_shape), Symbol(var), Symbol(eq), List(exp)] if eq == ":=" => {
                 Ok(Self::Declaration(Declaration {
                     lhs: var.clone(),
                     rhs: Expr::parse(exp)?,
                     scope: Box::new(scope),
                 }))
-            },
-            _ => {
-                Err(anyhow!("Not a valid declaration {:?}", decl))
-            },
+            }
+            _ => Err(anyhow!("Not a valid declaration {:?}", decl)),
         }
     }
 
@@ -475,7 +482,9 @@ impl FnDec {
         match s {
             List(l) => match &l[..] {
                 // todo: clean up shape-checking support
-                [Int(_shape), Symbol(fun_dec), Symbol(name), List(args), List(body)] if fun_dec == "func" => {
+                [Int(_shape), Symbol(fun_dec), Symbol(name), List(args), List(body)]
+                    if fun_dec == "func" =>
+                {
                     let args = args.iter().map(Arg::parse).collect::<anyhow::Result<_>>()?;
                     let t: Vec<_> = body.iter().collect();
                     let body = Stmt::parse(t);
@@ -486,7 +495,9 @@ impl FnDec {
                         rettyp: None,
                     })
                 }
-                [Symbol(_shape), Symbol(fun_dec), Symbol(name), List(args), List(body)] if fun_dec == "func" => {
+                [Symbol(_shape), Symbol(fun_dec), Symbol(name), List(args), List(body)]
+                    if fun_dec == "func" =>
+                {
                     let args = args.iter().map(Arg::parse).collect::<anyhow::Result<_>>()?;
                     let t: Vec<_> = body.iter().collect();
                     Ok(Self {
@@ -499,36 +510,38 @@ impl FnDec {
                 _ => {
                     debug!("List not matching: {:?}", l);
                     Err(anyhow!("FnDec Shape of SExpr::List does not match"))
-                },
+                }
             },
             _ => {
                 debug!("SExpr not matching: {:?}", s);
                 Err(anyhow!("SExpr is not a list"))
-            },
+            }
         }
     }
 }
 
 impl GlobalVar {
-    fn parse(s: SExpr) -> anyhow:: Result<Self> {
+    fn parse(s: SExpr) -> anyhow::Result<Self> {
         match s {
             List(l) => match &l[..] {
-                [Int(shape), Symbol(scope), Symbol(var_name), Symbol(assign), List(body)] 
-                    if *shape == 1 && scope == "global" && assign == ":=" => {
+                [Int(shape), Symbol(scope), Symbol(var_name), Symbol(assign), List(body)]
+                    if *shape == 1 && scope == "global" && assign == ":=" =>
+                {
                     Ok(Self {
                         name: var_name.clone(),
                         shape: Shape::Simple,
                         value: Expr::parse(body)?,
                     })
-                },
-                [Symbol(shape), Symbol(scope), Symbol(var_name), Symbol(assign), List(body)] 
-                    if scope == "global" && assign == ":=" => {
+                }
+                [Symbol(shape), Symbol(scope), Symbol(var_name), Symbol(assign), List(body)]
+                    if scope == "global" && assign == ":=" =>
+                {
                     Ok(Self {
                         name: var_name.clone(),
                         shape: Shape::parse(shape).unwrap(),
                         value: Expr::parse(body)?,
                     })
-                },
+                }
                 _ => Err(anyhow!("GlobalVar Shape of SExpr::List does not match")),
             },
             _ => Err(anyhow!("SExpr is not a list")),
@@ -605,6 +618,7 @@ impl Program {
         let extern_fields = Self::get_toplevel_annotations(&s, "extern field");
         let extern_consts = Self::get_toplevel_annotations(&s, "extern const");
         let extern_methods = Self::get_toplevel_annotations(&s, "ffi");
+        let extern_functions = Self::get_toplevel_annotations(&s, "extern function");
 
         let sexprs = get_sexprs(s, cake_path)?
             .iter()
@@ -617,8 +631,7 @@ impl Program {
         for sexpr in sexprs {
             if let Ok(func) = FnDec::parse(sexpr.clone()) {
                 functions.push(func);
-            }
-            else if let Ok(var) = GlobalVar::parse(sexpr.clone()) {
+            } else if let Ok(var) = GlobalVar::parse(sexpr.clone()) {
                 global_vars.push(var);
             }
         }
@@ -636,6 +649,7 @@ impl Program {
             extern_fields,
             extern_consts,
             extern_methods,
+            extern_functions,
         })
     }
 

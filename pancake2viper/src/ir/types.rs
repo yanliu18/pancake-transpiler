@@ -282,6 +282,9 @@ impl ir::Program {
         for ffi in &self.extern_methods {
             ctx.set_type(ffi.clone(), Type::Word);
         }
+        for func in &self.extern_functions {
+            ctx.set_type(func.name.clone(), func.typ.clone());
+        }
         for field in &self.model.fields {
             ctx.set_type(field.to_string(), Type::Ref);
         }

@@ -1,9 +1,10 @@
 use crate::{
     annotation::{
-        parse_extern_ffi, parse_extern_field, parse_extern_const, parse_extern_predicate, parse_function, parse_method,
-        parse_model_field, parse_model_predicate, parse_predicate, parse_shared,
+        parse_extern_const, parse_extern_ffi, parse_extern_field, parse_extern_function,
+        parse_extern_predicate, parse_function, parse_method, parse_model_field,
+        parse_model_predicate, parse_predicate, parse_shared,
     },
-    ir::{self, Model},
+    ir::{self, Function, Model},
     pancake,
     utils::{ToType, TranslationError, TryToIR},
 };
@@ -29,7 +30,10 @@ impl TryToIR for pancake::FnDec {
         let mut body = args.iter().fold(self.body.to_ir()?, |scope, arg| {
             ir::Stmt::Definition(ir::Definition {
                 lhs: arg.name.clone(),
-                rhs: ir::Expr::Var(ir::Var {name: arg.name.clone(), global: None}),
+                rhs: ir::Expr::Var(ir::Var {
+                    name: arg.name.clone(),
+                    global: None,
+                }),
                 scope: Box::new(scope),
             })
         });
@@ -148,6 +152,14 @@ impl TryFrom<pancake::Program> for ir::Program {
                     .map_err(|err| TranslationError::ParsingError(err.to_string()))
             })
             .collect::<Result<_, _>>()?;
+        let extern_functions = value
+            .extern_functions
+            .iter()
+            .map(|s| {
+                parse_extern_function(s)
+                    .map_err(|err| TranslationError::ParsingError(err.to_string()))
+            })
+            .collect::<Result<Vec<_>, _>>()?;
         let extern_methods = value
             .extern_methods
             .iter()
@@ -167,6 +179,7 @@ impl TryFrom<pancake::Program> for ir::Program {
             extern_fields,
             extern_consts,
             extern_methods,
+            extern_functions,
             model,
         })
     }

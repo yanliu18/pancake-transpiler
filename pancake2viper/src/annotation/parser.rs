@@ -157,6 +157,19 @@ pub fn parse_extern_const(s: &str) -> ParseResult<Decl> {
         .map(|mut pairs| Decl::from_pest(pairs.next().unwrap().into_inner().next().unwrap()))?)
 }
 
+pub fn parse_extern_function(func: &str) -> ParseResult<Function> {
+    let (name, args, mut pair) = parse_toplevel_common(func, Rule::ext_function)?;
+    let typ = Type::from_pest(pair.next().unwrap());
+    Ok(Function {
+        name,
+        args: args.into_iter().map(Arg::from).collect(),
+        typ,
+        pres: Vec::new(),
+        posts: Vec::new(),
+        body: None,
+    })
+}
+
 pub fn parse_extern_ffi(s: &str) -> ParseResult<String> {
     Ok(AnnotParser::parse(Rule::ffi_method, s).map(|mut pairs| {
         pairs
@@ -275,7 +288,10 @@ fn parse_expr(pairs: Pairs<Rule>) -> Expr {
             Rule::int_lit => Expr::Const(u64::from_pest(primary)),
             Rule::quantified => Expr::Quantified(Quantified::from_pest(primary)),
             Rule::expr => parse_expr(primary.into_inner()),
-            Rule::ident => Expr::Var(Var {name: primary.as_str().to_owned(), global: None}),
+            Rule::ident => Expr::Var(Var {
+                name: primary.as_str().to_owned(),
+                global: None,
+            }),
             Rule::old => Expr::Old(Old {
                 expr: Box::new(parse_expr(primary.into_inner())),
             }),
@@ -296,18 +312,16 @@ fn parse_expr(pairs: Pairs<Rule>) -> Expr {
                 optype: UnOpType::from_pest(op),
             })
         })
-        .map_infix(|lhs, op, rhs| {
-            match op.as_rule() {
-                Rule::contains => { Expr::Contains( Contains {
-                    left: Box::new(lhs),
-                    right: Box::new(rhs),
-                })},
-                _ => { Expr::BinOp(BinOp {
-                    optype: BinOpType::from_pest(op),
-                    left: Box::new(lhs),
-                    right: Box::new(rhs),
-                })}
-            }
+        .map_infix(|lhs, op, rhs| match op.as_rule() {
+            Rule::contains => Expr::Contains(Contains {
+                left: Box::new(lhs),
+                right: Box::new(rhs),
+            }),
+            _ => Expr::BinOp(BinOp {
+                optype: BinOpType::from_pest(op),
+                left: Box::new(lhs),
+                right: Box::new(rhs),
+            }),
         })
         .map_postfix(|lhs, op| match op.as_rule() {
             Rule::field_acc => Expr::Field(Field {
@@ -324,10 +338,11 @@ fn parse_expr(pairs: Pairs<Rule>) -> Expr {
                 // let mem_type = op.as_str().split('.').last().unwrap().to_string();
                 let idx = Box::new(parse_expr(op.into_inner()));
                 Expr::ArrayAccess(ArrayAccess {
-                obj: Box::new(lhs),
-                idx: idx,
-                mem_type: mem_type,
-            })},
+                    obj: Box::new(lhs),
+                    idx: idx,
+                    mem_type: mem_type,
+                })
+            }
             Rule::ternary => {
                 let mut pairs = op.into_inner();
                 Expr::Ternary(Ternary {
@@ -619,9 +634,11 @@ impl FromPestPair for SeqLength {
             .next()
             .unwrap();
         let expr = parse_expr(Pairs::single(expr_pairs));
-        Self { expr: Box::new(expr) }
+        Self {
+            expr: Box::new(expr),
+        }
     }
-} 
+}
 
 impl FromPestPair for FunctionCall {
     fn from_pest(pair: Pair<'_, Rule>) -> Self {

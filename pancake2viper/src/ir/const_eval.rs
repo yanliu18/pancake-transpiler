@@ -320,6 +320,7 @@ impl ConstEval for Program {
             extern_fields: self.extern_fields,
             extern_consts: self.extern_consts,
             extern_methods: self.extern_methods,
+            extern_functions: self.extern_functions,
         }
     }
 }

@@ -88,4 +88,5 @@ pub struct Program {
     pub extern_fields: HashMap<String, Type>,
     pub extern_methods: HashSet<String>,
     pub extern_consts: HashMap<String, Type>,
+    pub extern_functions: Vec<Function>,
 }

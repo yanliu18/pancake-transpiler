@@ -132,6 +132,7 @@ model_field = { "/@" ~ "model" ~ "field" ~ ident ~ "@/" }
 ext_predicate = { "/@" ~ "extern" ~ "predicate" ~ ident ~ "@/" }
 ext_field = { "/@" ~ "extern" ~ "field" ~ decl ~ "@/" }
 ext_const = { "/@" ~ "extern" ~ "const" ~ decl ~ "@/" }
+ext_function = { "/@" ~ "extern" ~ "function" ~ ident ~ "(" ~ method_args ~ ")" ~ ":" ~ type ~ "@/" }
 ffi_method = { "/@" ~ "ffi" ~ ident ~ "@/" }
 
 // Shared memory annotations
