@@ -94,6 +94,10 @@ pub trait MethodsCalled {
     fn methods_called(self) -> HashSet<String>;
 }
 
+pub trait FunctionsUsed {
+    fn functions_used(&self) -> HashSet<String>;
+}
+
 pub trait ProgramToViper<'a> {
     fn to_viper(
         self,

@@ -5,7 +5,8 @@ use viper::AstFactory;
 use crate::{
     ir,
     utils::{
-        ExprSubstitution, MethodsCalled, Shape, ToType, TranslationError, TryToShape, ViperUtils,
+        ExprSubstitution, FunctionsUsed, MethodsCalled, Shape, ToType, TranslationError,
+        TryToShape, ViperUtils,
     },
 };
 
@@ -359,8 +360,7 @@ impl Program {
         let calling_methods = self.functions.clone().into_iter().filter(|f| !f.trusted);
         let called_method_names = calling_methods
             .clone()
-            .map(|m| m.body.methods_called())
-            .flat_map(|s| s)
+            .flat_map(|m| m.body.methods_called())
             .collect::<HashSet<_>>();
         let called_methods = self
             .functions
@@ -370,6 +370,30 @@ impl Program {
             .chain(calling_methods.into_iter())
             .collect::<Vec<_>>();
         self.functions = called_methods;
+
+        let used_functions_names = self
+            .functions
+            .clone()
+            .into_iter()
+            .flat_map(|m| {
+                let mut all: Vec<Box<dyn FunctionsUsed>> = m
+                    .pres
+                    .iter()
+                    .chain(m.posts.iter())
+                    .map(|e| Box::new(e.clone()) as Box<dyn FunctionsUsed>)
+                    .collect();
+                all.push(Box::new(m.body));
+                all
+            })
+            .flat_map(|p| p.functions_used())
+            .collect::<HashSet<_>>();
+        let used_predicates = self
+            .predicates
+            .clone()
+            .into_iter()
+            .filter(|e| used_functions_names.contains(&e.name))
+            .collect::<Vec<_>>();
+        self.predicates = used_predicates;
     }
 }
 

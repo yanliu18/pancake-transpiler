@@ -365,6 +365,7 @@ impl App {
                 encoder,
                 use_viper_cli,
                 refute_in_includes,
+                encoder == EncodingMode::Int,
                 new_path,
             )?;
         }
@@ -381,6 +382,7 @@ impl App {
         encoding_mode: EncodingMode,
         use_viper_cli: bool,
         refute_in_includes: bool,
+        add_model: bool,
         maybe_path: Option<String>,
     ) -> Result<()> {
         self.print_name(&name);
@@ -391,7 +393,12 @@ impl App {
                 .to_viper(ctx.clone(), viper_handle.ast, encode_opts, encoding_mode)?;
         let transpiled = viper_handle.utils.pretty_print(vpr_program);
 
-        let transpiled = self.add_includes_model(transpiled, refute_in_includes)?;
+        let transpiled = if add_model {
+            self.add_includes_model(transpiled, refute_in_includes)?
+        } else {
+            println!("WARNING: models not currently supported with bitvec functions");
+            transpiled
+        };
 
         // Save the transpiled Viper code in a file
         if let Some(path) = &maybe_path {
