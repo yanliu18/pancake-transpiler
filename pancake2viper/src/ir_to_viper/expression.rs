@@ -227,7 +227,10 @@ impl<'a> TryToViper<'a> for ir::Quantified {
         } else {
             vec![ast.trigger(&self.triggers.to_viper(ctx)?)]
         };
-        Ok(ast.forall(&vars, &triggers, self.body.to_viper(ctx)?))
+        Ok(match self.quantifier {
+            ir::Quantifier::Forall => ast.forall(&vars, &triggers, self.body.to_viper(ctx)?),
+            ir::Quantifier::Exists => ast.exists(&vars, &triggers, self.body.to_viper(ctx)?),
+        })
     }
 }
 
