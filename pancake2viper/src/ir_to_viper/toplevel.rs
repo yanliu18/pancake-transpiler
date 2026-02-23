@@ -236,6 +236,16 @@ impl<'a> ProgramToViper<'a> for Program {
         );
         ctx.set_mode(TranslationMode::PrePost);
 
+        // add abstract predicates to predicate names set
+        for pred in self.extern_predicates {
+            predicate_names.insert(pred);
+        }
+        for pred in &self.model.predicates {
+            if let Expr::FunctionCall(call) = pred {
+                predicate_names.insert(call.fname.trim_start_matches("f_").to_owned());
+            }
+        }
+
         let predicates = self
             .predicates
             .into_iter()
@@ -257,16 +267,6 @@ impl<'a> ProgramToViper<'a> for Program {
                 p.to_viper(&mut ctx)
             })
             .collect::<Result<Vec<_>, _>>()?;
-
-        // add abstract predicates to predicate names set
-        for pred in self.extern_predicates {
-            predicate_names.insert(pred);
-        }
-        for pred in &self.model.predicates {
-            if let Expr::FunctionCall(call) = pred {
-                predicate_names.insert(call.fname.trim_start_matches("f_").to_owned());
-            }
-        }
 
         let mut functions = self
             .viper_functions

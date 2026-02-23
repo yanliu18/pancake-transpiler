@@ -214,6 +214,13 @@ impl<'a> TryToViper<'a> for ir::Annotation {
                 }
                 Err(ToViperError::InvalidAnnotation)
             }
+            Label => {
+                if let ir::Expr::Label(l) = self.expr {
+                    Ok(ast.label(&l, &[]))
+                } else {
+                    Err(ToViperError::InvalidAnnotation)
+                }
+            }
             fold @ (Fold | Unfold) => match self.expr {
                 ir::Expr::FunctionCall(access) => {
                     let ast_node = |e| match fold {

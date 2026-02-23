@@ -437,7 +437,10 @@ impl<'a> TryToViper<'a> for ir::Expr {
                 Label(_) => todo!(), // XXX: not sure if we need this
                 BaseAddr => ctx.encoding_mode.zero(ctx.ast),
                 BytesInWord => ctx.encoding_mode.lit(ctx.ast, ctx.options.word_size / 8),
-                Old(old) => ast.old(old.expr.to_viper(ctx)?),
+                Old(old) => match old.label {
+                    Some(l) => ast.labelled_old(old.expr.to_viper(ctx)?, &l),
+                    None => ast.old(old.expr.to_viper(ctx)?),
+                },
                 SeqLength(s) => ast.seq_length(s.expr.to_viper(ctx)?),
                 _ => {
                     println!("{:?}", x);

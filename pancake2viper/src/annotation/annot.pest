@@ -88,7 +88,7 @@ expr = !{ prefix? ~ primary ~ postfix* ~ (infix ~ prefix? ~ primary ~ postfix*)*
                 perm_frac = { integer ~ "/" ~ integer }
                 perm_var = { ident }
 
-        old = {"old(" ~ expr ~ ")" }
+        old = {"old" ~ ("[" ~ ident ~ "]")? ~ "(" ~ expr ~ ")" }
         seq_length = { "|" ~ seq_expr ~ "|" }
         seq_expr = @{ (!("|") ~ ANY)+ }
         f_call = {ident ~ "(" ~ (expr ~ ("," ~ expr)* | "") ~ ")" }
@@ -96,7 +96,7 @@ expr = !{ prefix? ~ primary ~ postfix* ~ (infix ~ prefix? ~ primary ~ postfix*)*
         biw = { "@biw" }
         base = { "@base" }
 
-annotation_stmt = { WHITESPACE* ~ ((annotation_keyword ~ expr) | trusted) ~ EOI }
+annotation_stmt = { WHITESPACE* ~ ((label ~ ident) | (annotation_keyword ~ expr) | trusted) ~ EOI }
 annotation = { WHITESPACE* ~ ((annotation_keyword ~ expr) | trusted) }
     annotation_keyword = _{ pre | post | invariant | assertion | refutation | assumption | inhale | exhale | fold | unfold | use_f }
         pre = { "requires" }
@@ -111,6 +111,7 @@ annotation = { WHITESPACE* ~ ((annotation_keyword ~ expr) | trusted) }
         unfold = { "unfold" }
 		trusted = { "trusted" }
 		use_f = { "use" }
+		label = { "label" }
 
 predicate = { "/@" ~ "predicate" ~ ident ~ "(" ~ pred_args ~ ")" ~ pred_body ~ "@/" }
     pred_args = { (decl ~ ("," ~ decl)*) | "" }

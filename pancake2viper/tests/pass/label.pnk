@@ -1,0 +1,4 @@
+fun 1 main() {
+	/@ label x @/
+	return 0;
+}

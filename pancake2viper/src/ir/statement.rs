@@ -135,6 +135,7 @@ pub enum AnnotationType {
     Unfold,
     Trusted,
     Use,
+    Label,
 }
 
 #[derive(Debug, Clone)]

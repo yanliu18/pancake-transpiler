@@ -184,6 +184,7 @@ impl Display for AnnotationType {
                 Self::Unfold => "unfold",
                 Self::Trusted => "trusted",
                 Self::Use => "use",
+                Self::Label => "label",
             }
         )
     }

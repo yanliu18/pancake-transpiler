@@ -80,6 +80,7 @@ impl ConstEvalExpr for Expr {
             }),
             Old(o) => Old(ir::Old {
                 expr: Box::new(o.expr.const_eval(options)),
+                label: o.label,
             }),
             ViperFieldAccess(f) => ViperFieldAccess(ir::ViperFieldAccess {
                 obj: Box::new(f.obj.const_eval(options)),

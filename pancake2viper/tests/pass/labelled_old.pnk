@@ -1,0 +1,13 @@
+var v1 = 0;
+
+fun main() {
+	/@ requires acc(gv.v1) @/
+	/@ ensures acc(gv.v1) @/
+	v1 = 2;
+	/@ label a @/
+	v1 = 3;
+	/@ label b @/
+	/@ assert old[a](gv.v1) == 2 @/
+	/@ assert old[b](gv.v1) == gv.v1 @/
+	return 0;
+}

@@ -48,6 +48,7 @@ pub fn parse_annot(annot: &str, is_stmt: bool) -> ParseResult<Annotation> {
         let typ = AnnotationType::from_pest(pair.next().unwrap());
         let expr = match typ {
             AnnotationType::Trusted => Expr::Const(1),
+            AnnotationType::Label => Expr::Label(pair.next().unwrap().as_str().to_owned()),
             _ => parse_expr(Pairs::single(pair.next().unwrap())),
         };
         Annotation { typ, expr }
@@ -292,9 +293,7 @@ fn parse_expr(pairs: Pairs<Rule>) -> Expr {
                 name: primary.as_str().to_owned(),
                 global: None,
             }),
-            Rule::old => Expr::Old(Old {
-                expr: Box::new(parse_expr(primary.into_inner())),
-            }),
+            Rule::old => Expr::Old(Old::from_pest(primary)),
             Rule::f_call => Expr::FunctionCall(FunctionCall::from_pest(primary)),
             Rule::acc_slice => Expr::AccessSlice(AccessSlice::from_pest(primary)),
             Rule::acc_pred => Expr::AccessPredicate(AccessPredicate::from_pest(primary)),
@@ -430,6 +429,7 @@ impl FromPestPair for AnnotationType {
             Rule::unfold => Self::Unfold,
             Rule::trusted => Self::Trusted,
             Rule::use_f => Self::Use,
+            Rule::label => Self::Label,
             _ => unreachable!(),
         }
     }
@@ -657,6 +657,24 @@ impl FromPestPair for UnfoldingIn {
         Self {
             pred: Box::new(Expr::FunctionCall(pred)),
             expr: Box::new(expr),
+        }
+    }
+}
+
+impl FromPestPair for Old {
+    fn from_pest(pair: Pair<'_, Rule>) -> Self {
+        let mut pairs = pair.into_inner();
+        let maybe_label = pairs.next().unwrap();
+        let (label, expr) = match maybe_label.as_rule() {
+            Rule::ident => (
+                Some(maybe_label.as_str().to_string()),
+                parse_expr(Pairs::single(pairs.next().unwrap())),
+            ),
+            _ => (None, parse_expr(Pairs::single(maybe_label))),
+        };
+        Self {
+            expr: Box::new(expr),
+            label: label,
         }
     }
 }

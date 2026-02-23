@@ -215,12 +215,13 @@ pub struct AccessSlice {
     pub lower: Box<Expr>,
     pub upper: Box<Expr>,
     pub perm: Permission,
-    pub mem: String,    
+    pub mem: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Old {
     pub expr: Box<Expr>,
+    pub label: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]

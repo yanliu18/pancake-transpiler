@@ -1,0 +1,8 @@
+/@ extern predicate f @/
+
+fun x() {
+	/@ requires f() @/
+	/@ ensures f() @/
+	/@ ensures unfolding f() in true @/
+	return 0;
+}
