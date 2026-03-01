@@ -64,7 +64,10 @@ impl ExprTypeResolution for ir::ArrayAccess {
         ctx: &mut TypeContext,
     ) -> Result<Type, TranslationError> {
         let obj_type = self.obj.resolve_expr_type(is_annot, ctx)?;
-        assert_eq!(self.idx.resolve_expr_type(is_annot, ctx)?, Type::Word);
+        assert!({
+            let typ = self.idx.resolve_expr_type(is_annot, ctx)?;
+            typ == Type::Word || typ == Type::Int
+        });
         match obj_type {
             Type::Struct(inner) => Ok(match *self.idx {
                 Expr::Const(i) => inner[i as usize].to_type(is_annot),
