@@ -549,8 +549,12 @@ impl FromPestPair for Quantified {
             .next()
             .unwrap()
             .into_inner()
-            .map(|e| parse_expr(Pairs::single(e)))
-            .collect::<Vec<_>>();
+            .map(|p| {
+                p.into_inner()
+                    .map(|e| parse_expr(Pairs::single(e)))
+                    .collect::<Vec<_>>()
+            })
+            .collect::<Vec<Vec<_>>>();
         let body = Box::new(parse_expr(Pairs::single(pairs.next().unwrap())));
 
         Quantified {

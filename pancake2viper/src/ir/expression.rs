@@ -172,7 +172,7 @@ pub enum Quantifier {
 pub struct Quantified {
     pub quantifier: Quantifier,
     pub decls: Vec<Decl>,
-    pub triggers: Vec<Expr>,
+    pub triggers: Vec<Vec<Expr>>,
     pub body: Box<Expr>,
 }
 

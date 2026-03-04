@@ -222,11 +222,11 @@ impl<'a> TryToViper<'a> for ir::Quantified {
             .into_iter()
             .map(|d| d.to_viper(ctx))
             .collect::<Vec<_>>();
-        let triggers = if self.triggers.is_empty() {
-            vec![]
-        } else {
-            vec![ast.trigger(&self.triggers.to_viper(ctx)?)]
-        };
+        let triggers = self
+            .triggers
+            .into_iter()
+            .map(|e| Ok(ast.trigger(&e.to_viper(ctx)?)))
+            .collect::<Result<Vec<_>, ToViperError>>()?;
         Ok(match self.quantifier {
             ir::Quantifier::Forall => ast.forall(&vars, &triggers, self.body.to_viper(ctx)?),
             ir::Quantifier::Exists => ast.exists(&vars, &triggers, self.body.to_viper(ctx)?),
