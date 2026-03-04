@@ -16,7 +16,7 @@ pub fn create_bv_domain(ast: AstFactory) -> Domain {
         ast.int_type(),
         false,
         "BitVectorDomain64",
-        Some("(_ bv2int 64)".into()),
+        Some("ubv_to_int".into()),
     );
 
     ast.domain_with_interpretation(
