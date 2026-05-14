@@ -6,7 +6,7 @@ It transpiles Pancake code into the Viper intermediate language and uses the Vip
 ## Getting the verifier
 
 The verifier is available as:
- - A standalone CLI program called `pancake2viper`, downloadable [here](https://github.com/alegnani/pancake-verifier/releases/)
+ - A standalone CLI program called `pancake2viper` (in this repo)
  - An interactive online website [Pancake Playground](https://trustworthy.systems/pancake-playground/)
 <!-- 
  - A VS Code extension, available [here](https://marketplace.visualstudio.com/items?itemName=alegnani.pancake-ide).
