@@ -99,7 +99,7 @@ expr = !{ prefix? ~ primary ~ postfix* ~ (infix ~ prefix? ~ primary ~ postfix*)*
 
 annotation_stmt = { WHITESPACE* ~ ((label ~ ident) | (annotation_keyword ~ expr) | trusted) ~ EOI }
 annotation = { WHITESPACE* ~ ((annotation_keyword ~ expr) | trusted) }
-    annotation_keyword = _{ pre | post | invariant | assertion | refutation | assumption | inhale | exhale | fold | unfold | use_f }
+    annotation_keyword = _{ pre | post | invariant | assertion | refutation | assumption | inhale | exhale | fold | unfold | use_f | call }
         pre = { "requires" }
         post = { "ensures" }
         invariant = { "invariant" }
@@ -113,6 +113,7 @@ annotation = { WHITESPACE* ~ ((annotation_keyword ~ expr) | trusted) }
 		trusted = { "trusted" }
 		use_f = { "use" }
 		label = { "label" }
+		call = { "call" }
 
 predicate = { "/@" ~ "predicate" ~ ident ~ "(" ~ pred_args ~ ")" ~ pred_body ~ "@/" }
     pred_args = { (decl ~ ("," ~ decl)*) | "" }

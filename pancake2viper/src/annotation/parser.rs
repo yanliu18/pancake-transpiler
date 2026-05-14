@@ -430,6 +430,7 @@ impl FromPestPair for AnnotationType {
             Rule::trusted => Self::Trusted,
             Rule::use_f => Self::Use,
             Rule::label => Self::Label,
+            Rule::call => Self::Call,
             _ => unreachable!(),
         }
     }

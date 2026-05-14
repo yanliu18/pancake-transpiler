@@ -221,6 +221,16 @@ impl<'a> TryToViper<'a> for ir::Annotation {
                     Err(ToViperError::InvalidAnnotation)
                 }
             }
+            Call => {
+                if let ir::Expr::FunctionCall(c) = self.expr {
+                    let args = c.args.to_viper(ctx)?;
+                    let mut base_args = ctx.get_default_args().1;
+                    base_args.extend(args);
+                    Ok(ast.method_call(&c.fname, &base_args, &[]))
+                } else {
+                    Err(ToViperError::InvalidAnnotation)
+                }
+            }
             fold @ (Fold | Unfold) => match self.expr {
                 ir::Expr::FunctionCall(access) => {
                     let ast_node = |e| match fold {
