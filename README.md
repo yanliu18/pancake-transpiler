@@ -257,4 +257,4 @@ If you want to use predicates or fields defined in the model in the Pancake code
 
 ### Other examples
 
-Annotation examples, showcasing all of the features, can be found in the [test folder](https://github.com/alegnani/pancake-verifier/tree/main/pancake2viper/tests).
+Annotation examples, showcasing all of the features, can be found in the [test folder](https://github.com/au-ts/pancake-transpiler/tree/main/pancake2viper/tests).
