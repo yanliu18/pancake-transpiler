@@ -9,6 +9,7 @@ pub struct HeapHelper<'a> {
     pub domain: Domain<'a>,
     pub len_f: DomainFunc<'a>,
     pub slot_f: DomainFunc<'a>,
+    pub slotq_f: DomainFunc<'a>,
     pub encoding: EncodingMode,
 }
 
@@ -35,6 +36,13 @@ impl<'a> HeapHelper<'a> {
             false,
             domain_name,
         );
+        let slotq_f = ast.domain_func(
+            "slotq",
+            &[a_decl, i_decl],
+            ast.ref_type(),
+            false,
+            domain_name,
+        );
         let len_f = ast.domain_func(
             "alen",
             &[a_decl],
@@ -50,9 +58,10 @@ impl<'a> HeapHelper<'a> {
             false,
             domain_name,
         );
-        let functions = [slot_f, len_f, first_f, second_f];
+        let functions = [slot_f, slotq_f, len_f, first_f, second_f];
 
         let slot_a_i_app = ast.domain_func_app(slot_f, &[a, i], &[]);
+        let slotq_a_i_app = ast.domain_func_app(slotq_f, &[a, i], &[]);
 
         let first_app = ast.domain_func_app(first_f, &[slot_a_i_app], &[]);
         let second_app = ast.domain_func_app(second_f, &[slot_a_i_app], &[]);
@@ -81,7 +90,30 @@ impl<'a> HeapHelper<'a> {
             domain_name,
         );
 
-        let axioms = [all_diff_ax, len_nonneg_ax];
+        let slotq_ax = ast.named_domain_axiom(
+            "slotq_rel",
+            ast.forall(
+                &[a_decl, i_decl],
+                &[ast.trigger(&[slotq_a_i_app])],
+                ast.eq_cmp(
+                    slotq_a_i_app,
+                    ast.domain_func_app(
+                        slot_f,
+                        &[
+                            a,
+                            match encoding {
+                                EncodingMode::Bitvec => ast.bv_mod(i, ast.backend_bv64_lit(256)),
+                                EncodingMode::Int => ast.module(i, ast.int_lit(256)),
+                            },
+                        ],
+                        &[],
+                    ),
+                ),
+            ),
+            domain_name,
+        );
+
+        let axioms = [all_diff_ax, len_nonneg_ax, slotq_ax];
 
         let domain = ast.domain(domain_name, &functions, &axioms, &[]);
         Self {
@@ -89,6 +121,7 @@ impl<'a> HeapHelper<'a> {
             domain,
             len_f,
             slot_f,
+            slotq_f,
             encoding,
         }
     }

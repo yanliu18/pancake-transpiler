@@ -268,27 +268,30 @@ impl<'a> ProgramToViper<'a> for Program {
             })
             .collect::<Result<Vec<_>, _>>()?;
 
-        let mut functions = self
-            .viper_functions
-            .into_iter()
-            .map(|f| {
-                let mut ctx = ViperEncodeCtx::new(
-                    types.clone(),
-                    predicate_names.clone(),
-                    ast,
-                    options,
-                    shared.clone(),
-                    method_ctx.clone(),
-                    model.clone(),
-                    pnk_methods.clone(),
-                    extern_methods.clone(),
-                    extern_consts.clone(),
-                    encoding_mode,
-                );
-                ctx.set_mode(TranslationMode::PrePost);
-                f.to_viper(&mut ctx)
-            })
-            .collect::<Result<Vec<_>, _>>()?;
+        let mut functions = match ctx.encoding_mode {
+            EncodingMode::Bitvec => vec![],
+            EncodingMode::Int => self
+                .viper_functions
+                .into_iter()
+                .map(|f| {
+                    let mut ctx = ViperEncodeCtx::new(
+                        types.clone(),
+                        predicate_names.clone(),
+                        ast,
+                        options,
+                        shared.clone(),
+                        method_ctx.clone(),
+                        model.clone(),
+                        pnk_methods.clone(),
+                        extern_methods.clone(),
+                        extern_consts.clone(),
+                        encoding_mode,
+                    );
+                    ctx.set_mode(TranslationMode::PrePost);
+                    f.to_viper(&mut ctx)
+                })
+                .collect::<Result<Vec<_>, _>>()?,
+        };
 
         let abstract_methods = self
             .methods
