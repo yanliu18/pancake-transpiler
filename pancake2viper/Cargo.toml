@@ -16,5 +16,16 @@ sexpr_parser = "0.3.0"
 strum = { version = "0.26.3", features = ["derive"] }
 thiserror = "1.0.64"
 tracing = "0.1.40"
-viper = { path = "../prusti/viper" }
+viper = { path = "../prusti/viper", optional = true }
 tempfile = "3.15.0"
+
+[features]
+default = ["viper"]
+# The Viper backend: encoding the IR and running the verifier through the
+# JVM. Without it the crate is the Pancake and annotation front end only —
+# the parsers and the IR — with no JVM at build or run time.
+viper = ["dep:viper"]
+
+[[bin]]
+name = "pancake2viper"
+required-features = ["viper"]

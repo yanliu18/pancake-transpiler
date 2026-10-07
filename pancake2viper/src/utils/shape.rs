@@ -1,6 +1,8 @@
 use std::fmt::Display;
 
-use super::{errors::ShapeError, traits::ToViperType, ViperEncodeCtx};
+use super::errors::ShapeError;
+#[cfg(feature = "viper")]
+use super::{traits::ToViperType, ViperEncodeCtx};
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub enum Shape {
@@ -40,6 +42,7 @@ impl Shape {
     }
 }
 
+#[cfg(feature = "viper")]
 impl<'a> ToViperType<'a> for Shape {
     fn to_viper_type(&self, ctx: &ViperEncodeCtx<'a>) -> viper::Type<'a> {
         match self {

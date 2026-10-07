@@ -14,6 +14,8 @@ The verifier is available as:
 
 ## Dependencies
 
+The dependencies below are those of the Viper backend (the `viper` cargo feature, on by default). A crate that only needs the front end — the Pancake and annotation parsers and the IR — can depend on `pancake2viper` with `default-features = false`, which builds and runs without a JVM.
+
 - JDK11 or newer
 - Viper toolchain v4.3.1 (available as part of the [VS Code extension](https://marketplace.visualstudio.com/items?itemName=viper-admin.viper) with "Install Specific Version..." or as a standalone [release](https://github.com/viperproject/viper-ide/releases/tag/v4.3.1).
 - CakeML compiler rev. [Job 2960](https://cakeml.org/regression.cgi/job/2960) 
