@@ -14,7 +14,7 @@ The verifier is available as:
 
 ## Dependencies
 
-The dependencies below are those of the Viper backend (the `viper` cargo feature, on by default). A crate that only needs the front end — the Pancake and annotation parsers and the IR — can depend on `pancake2viper` with `default-features = false`, which builds and runs without a JVM.
+The dependencies below are those of the Viper backend (the `viper` cargo feature, on by default, which also turns on `pancake` and `cli`). A crate that only needs a front end can depend on `pancake2viper` with `default-features = false`, which builds and runs without a JVM: with no feature it is the annotation parser and the IR alone (for a tool that reads `/@ … @/` contracts); `pancake` adds reading a program through `cake --explore`; `cli` adds the command-line options.
 
 - JDK11 or newer
 - Viper toolchain v4.3.1 (available as part of the [VS Code extension](https://marketplace.visualstudio.com/items?itemName=viper-admin.viper) with "Install Specific Version..." or as a standalone [release](https://github.com/viperproject/viper-ide/releases/tag/v4.3.1).

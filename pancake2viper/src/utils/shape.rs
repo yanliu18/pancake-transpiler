@@ -1,8 +1,13 @@
 use std::fmt::Display;
 
+use pest::Parser as _;
+use pest_derive::Parser;
+
 use super::errors::ShapeError;
+use super::traits::ToType;
 #[cfg(feature = "viper")]
 use super::{traits::ToViperType, ViperEncodeCtx};
+use crate::ir::Type;
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub enum Shape {
@@ -113,5 +118,53 @@ mod tests {
             ])
         );
         assert_eq!(shape.len(), 7);
+    }
+}
+
+#[derive(Parser)]
+#[grammar = "src/pancake/shape.pest"]
+struct ShapeParser;
+
+impl Shape {
+    fn parse_term(pair: pest::iterators::Pair<'_, Rule>) -> anyhow::Result<Self> {
+        let n = pair.as_str().parse::<u64>()?;
+        Ok(if n == 1 {
+            Self::Simple
+        } else {
+            Self::Nested((0..n).map(|_| Self::Simple).collect())
+        })
+    }
+
+    pub fn parse(s: &str) -> anyhow::Result<Self> {
+        let top = ShapeParser::parse(Rule::top, s)?
+            .next()
+            .unwrap()
+            .into_inner()
+            .next()
+            .unwrap();
+        match top.as_rule() {
+            Rule::term => Self::parse_term(top),
+            Rule::shape => {
+                let inner = top
+                    .into_inner()
+                    .map(|pair| match pair.as_rule() {
+                        Rule::term => Self::parse_term(pair),
+                        Rule::shape => Self::parse(pair.as_str()),
+                        _ => unreachable!(),
+                    })
+                    .collect::<Result<Vec<_>, _>>();
+                Ok(Shape::Nested(inner?))
+            }
+            _ => unreachable!(),
+        }
+    }
+}
+
+impl ToType for Shape {
+    fn to_type(&self, _is_annot: bool) -> Type {
+        match self {
+            Self::Simple => Type::Int,
+            Self::Nested(inner) => Type::Struct(inner.clone()),
+        }
     }
 }
